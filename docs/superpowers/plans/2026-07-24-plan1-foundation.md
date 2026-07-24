@@ -69,7 +69,8 @@ export default defineConfig({
 })
 ```
 
-Add to `package.json` scripts: `"typecheck": "tsc --noEmit", "test": "vitest run"`.
+Add to `package.json` scripts: `"typecheck": "tsc -b --noEmit", "test": "vitest run"`.
+(`-b` required: template tsconfig.json is solution-style with `files: []` + references — plain `tsc --noEmit` checks zero files and always passes.)
 Ensure `tsconfig.json` has `"strict": true`.
 
 `.github/workflows/ci.yml`:
