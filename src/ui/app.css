@@ -1,0 +1,215 @@
+/* Minimal UI styling (Task 10): mobile-first, no framework. Colors are CSS
+   variables so light/dark just swap a block via prefers-color-scheme. */
+
+:root {
+  --bg: #f7f7f9;
+  --fg: #1a1a1a;
+  --muted: #6b7280;
+  --card-bg: #ffffff;
+  --card-border: #e2e2e6;
+  --accent: #2b6cb0;
+  --accent-fg: #ffffff;
+  --banner-bg: #fff3cd;
+  --banner-fg: #7a5b00;
+  --error-fg: #b00020;
+  --badge-bg: #b00020;
+  --badge-fg: #ffffff;
+  --table-stripe: #f1f1f4;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --fg: #e8e8ea;
+    --muted: #9aa0a8;
+    --card-bg: #1e2126;
+    --card-border: #2c2f36;
+    --accent: #5b9bd5;
+    --accent-fg: #0b1015;
+    --banner-bg: #4a3b00;
+    --banner-fg: #ffe08a;
+    --error-fg: #ff6b6b;
+    --badge-bg: #ff6b6b;
+    --badge-fg: #1a1a1a;
+    --table-stripe: #22252b;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.app {
+  padding: 1rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+header h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tabs button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.tabs button.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+.badge {
+  display: inline-block;
+  min-width: 1.1rem;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--badge-bg);
+  color: var(--badge-fg);
+  font-size: 0.75rem;
+  line-height: 1.3rem;
+  text-align: center;
+}
+
+.banner {
+  background: var(--banner-bg);
+  color: var(--banner-fg);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.card {
+  flex: 1 1 140px;
+  min-width: 140px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+}
+
+.card-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.card-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--card-border);
+  white-space: nowrap;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--table-stripe);
+}
+
+.status {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--error-fg);
+}
+
+.status button,
+.signin button {
+  margin-top: 1rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.signin {
+  max-width: 420px;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.signin h1 {
+  margin-bottom: 1rem;
+}
+
+.note {
+  color: var(--muted);
+}
+
+.hint {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--card-bg);
+  border: 1px dashed var(--card-border);
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .app {
+    padding: 1.5rem;
+  }
+}
