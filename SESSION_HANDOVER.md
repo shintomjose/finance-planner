@@ -35,8 +35,10 @@ Reference workbook: `C:\Users\shintappan\Desktop\PROJECTS\chavara-badminton\docs
       sheets + full UI) deliberately deferred until Plan 1 executes.
 - [x] Plan 1 EXECUTED (2026-07-24, subagent-driven): 16 commits, 66/66 tests,
       all task reviews + final whole-branch review clean. Merged to main, pushed.
-- [ ] User: GCP setup (README "Setup"), fill src/config.ts, repo → public,
-      Pages source → GitHub Actions, first deploy + real-sheet run.
+- [x] GCP setup done, real IDs in src/config.ts (b9582e0), REAL-SHEET RUN WORKS
+      locally (2026-07-24). Post-plan hotfixes: fetch binding (Illegal
+      invocation), 403 error-body surfacing, cross-tab batchGet (182→14 reqs).
+- [ ] User: repo → public + Pages source → GitHub Actions → live URL.
 - [ ] Plan 2: special-sheet parsers + full UI modules (spec §5). Backlog from
       reviews in .superpowers/sdd/progress.md (union ParserIssue.kind, silent
       re-auth, cachedBanner precision, CI concurrency, tests typecheck, etc.).
