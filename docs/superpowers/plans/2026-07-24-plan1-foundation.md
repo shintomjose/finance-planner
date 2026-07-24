@@ -470,7 +470,7 @@ it('listMonthTabs filters non-month and dead tabs', async () => {
 ```ts
 // cache/db.ts  (raw indexedDB, no lib; store 'grids': key tab → {fetchedAt: number, grids: MonthGrids})
 export function getCached(tab: string): Promise<{ fetchedAt: number; grids: MonthGrids } | null>
-export function putCached(tab: string, grids: MonthGrids): Promise<void>
+export function putCached(tab: string, grids: MonthGrids, fetchedAt?: number): Promise<void> // fetchedAt param for tests; defaults to Date.now()
 // data/orchestrator.ts
 export interface LoadResult { months: MonthData[]; issues: ParserIssue[] }
 export const LIVE_TTL_MS = 10 * 60 * 1000
@@ -506,9 +506,16 @@ it('uncached tab fetched then cached', async () => {
   expect(c2.fetchMonthGrids).not.toHaveBeenCalled()
 })
 it('current month refetched when stale', async () => {
-  await putCached('FEB_22', JAN_22 as any) // fetchedAt = now-of-put; monkeypatch record age below
-  // simulate stale by re-putting with old fetchedAt via direct db write is overkill: assert TTL constant honored instead
-  expect(LIVE_TTL_MS).toBe(10 * 60 * 1000)
+  await putCached('FEB_22', JAN_22 as any, NOW.getTime() - LIVE_TTL_MS - 1)
+  const c = fakeClient(['FEB_22'])
+  await loadMonths(c, NOW)
+  expect(c.fetchMonthGrids).toHaveBeenCalledWith('FEB_22')
+})
+it('current month served from cache when fresh', async () => {
+  await putCached('FEB_22', JAN_22 as any, NOW.getTime() - 1000)
+  const c = fakeClient(['FEB_22'])
+  await loadMonths(c, NOW)
+  expect(c.fetchMonthGrids).not.toHaveBeenCalled()
 })
 it('parse errors collected, not thrown', async () => {
   const bad = { values: [], formulas: {} }
