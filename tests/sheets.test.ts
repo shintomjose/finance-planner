@@ -180,3 +180,46 @@ it('fetchManyMonthGrids: AuthExpiredError propagates rather than being swallowed
   const c = new SheetsClient(() => 'tok', f as any)
   await expect(c.fetchManyMonthGrids(['A', 'B'])).rejects.toBeInstanceOf(AuthExpiredError)
 })
+
+it('fetchRanges: N ranges issue exactly 1 HTTP call, order preserved (positional), UNFORMATTED_VALUE by default', async () => {
+  const f = vi.fn().mockImplementation(() => ok({ valueRanges: [{ values: [[1, 2]] }, { values: [['a']] }] }))
+  const c = new SheetsClient(() => 'tok', f as any)
+  const result = await c.fetchRanges(['SACHIN!A1:J340', 'BINANCE!A1:G30'])
+  expect(f).toHaveBeenCalledTimes(1)
+  expect(result).toEqual([[[1, 2]], [['a']]])
+  const url = String(f.mock.calls[0][0])
+  expect(url).toContain(encodeURIComponent('SACHIN!A1:J340'))
+  expect(url).toContain(encodeURIComponent('BINANCE!A1:G30'))
+  expect(url).toContain('valueRenderOption=UNFORMATTED_VALUE')
+  // ranges appear in request order — first `ranges=` param is SACHIN's.
+  expect(url.indexOf(encodeURIComponent('SACHIN'))).toBeLessThan(url.indexOf(encodeURIComponent('BINANCE')))
+})
+
+it('fetchRanges: render param forwarded as FORMULA', async () => {
+  const f = vi.fn().mockImplementation(() => ok({ valueRanges: [{ values: [['=A1']] }] }))
+  const c = new SheetsClient(() => 'tok', f as any)
+  await c.fetchRanges(['SACHIN!A1:A1'], 'FORMULA')
+  const url = String(f.mock.calls[0][0])
+  expect(url).toContain('valueRenderOption=FORMULA')
+})
+
+it('fetchRanges: a range whose valueRange has no `values` (empty tab / missing data) maps to null, not []', async () => {
+  const f = vi.fn().mockImplementation(() => ok({ valueRanges: [{ values: [[1]] }, {}] }))
+  const c = new SheetsClient(() => 'tok', f as any)
+  const result = await c.fetchRanges(['A!A1', 'B!A1'])
+  expect(result).toEqual([[[1]], null])
+})
+
+it('fetchRanges: empty ranges array resolves without any HTTP call', async () => {
+  const f = vi.fn()
+  const c = new SheetsClient(() => 'tok', f as any)
+  const result = await c.fetchRanges([])
+  expect(f).not.toHaveBeenCalled()
+  expect(result).toEqual([])
+})
+
+it('fetchRanges: 401 -> AuthExpiredError', async () => {
+  const f = vi.fn().mockResolvedValue(new Response('', { status: 401 }))
+  const c = new SheetsClient(() => 'tok', f as any)
+  await expect(c.fetchRanges(['A!A1'])).rejects.toBeInstanceOf(AuthExpiredError)
+})

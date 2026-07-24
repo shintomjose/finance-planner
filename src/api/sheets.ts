@@ -25,7 +25,7 @@ export class TabNotFoundError extends Error {
   }
 }
 
-type JsonValue = string | number | null
+export type JsonValue = string | number | null
 
 interface ValueRange { values?: JsonValue[][] }
 interface BatchGetResponse { valueRanges?: ValueRange[] }
@@ -196,6 +196,26 @@ export class SheetsClient {
     })
 
     return { grids, failures: new Map() }
+  }
+
+  /** Generic positional batchGet: one HTTP call for `ranges.length` ranges,
+   * result[i] corresponds to ranges[i] (the API returns valueRanges in
+   * request order, same assumption fetchManyMonthGridsBatch relies on).
+   * `render` defaults to UNFORMATTED_VALUE (numbers as numbers); pass
+   * 'FORMULA' for a formula-text read. A range whose valueRange comes back
+   * with no `values` (the tab exists but the range is genuinely empty, or —
+   * for tabs the caller expects to always have data, per specialTabs.ts —
+   * a signal something's wrong) maps to `null` rather than `[]`, so callers
+   * needing to tell "no data" apart from "empty tab" can do so. Empty
+   * `ranges` resolves to `[]` with no HTTP call, matching
+   * fetchManyMonthGrids's empty-input contract. */
+  async fetchRanges(ranges: string[], render: 'UNFORMATTED_VALUE' | 'FORMULA' = 'UNFORMATTED_VALUE'): Promise<(JsonValue[][] | null)[]> {
+    if (ranges.length === 0) return []
+    const query = ranges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')
+    const url = `${this.base}/values:batchGet?${query}&valueRenderOption=${render}`
+    const data = (await this.request(url)) as BatchGetResponse
+    const valueRanges = data.valueRanges ?? []
+    return ranges.map((_, i) => valueRanges[i]?.values ?? null)
   }
 }
 

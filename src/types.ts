@@ -34,3 +34,41 @@ export interface MonthData {
   expectedActual: number | null; balanceAfterFuture: number | null;
   upcoming: UpcomingItem[]; issues: ParserIssue[]
 }
+
+// Plan 2 domain types (Task 2 brief) — produced by the special-tab parsers
+// (Tasks 3–6), not wired into any parser/UI yet.
+export interface Budget { category: string; plannedMonthly: number }
+
+export interface InvestmentSnapshot {
+  date: string | null
+  source: 'db' | 'mf' | 'binance' | 'upstocks' | 'bank'
+  asset: string
+  investedEUR?: number
+  valueEUR?: number
+  investedINR?: number
+  valueINR?: number
+  // Mutual-funds parser (Task 4): flags a fund that has been fully sold off.
+  sold?: boolean
+}
+
+export interface PersonLedger {
+  name: string
+  entries: { date: string | null; label: string; amountEUR: number | null; row: number }[]
+  repayments: { date: string | null; label: string; amountEUR: number | null; row: number }[]
+  emis: { name: string; rows: { date: string | null; label: string; amountEUR: number | null; row: number }[] }[]
+  totals: { given: number; repaid: number; remaining: number }
+}
+
+export interface Trip {
+  name: string
+  totalINR: number | null
+  entriesINR: { date: string | null; label: string; amount: number | null; row: number }[]
+  entriesEUR: { date: string | null; label: string; amount: number | null; row: number }[]
+  iciciSplitINR: number | null
+}
+
+export interface LogEntry {
+  log: 'petrol' | 'gym' | 'gear' | 'alcohol'
+  date: string | null
+  fields: Record<string, number | string | null>
+}
