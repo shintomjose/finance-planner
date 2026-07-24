@@ -1,13 +1,10 @@
 // Month-ledger tab parser (workbook-map.md §1). Fills period/era resolution,
-// income[], expenses[], carryover, summary, and household tagging (Tasks 5–6).
-// Remaining MonthData fields (banks, upcoming, expectedActual,
-// balanceAfterFuture) are left as empty/null placeholders for Task 7, which
-// should add its own private `parseXBlock` functions alongside
-// `parseIncomeBlock`/`parseExpenseBlock`/`parseSummaryBlock` below and wire
-// them into `parseMonth`.
+// income[], expenses[], carryover, summary, household tagging, bank
+// balances, and upcoming items (Tasks 5–7). All blocks route unparseable
+// cells through ParserIssue rather than throwing or silently dropping.
 import { tabToPeriod, eraOf } from '../lib/period'
 import { normLabel } from '../lib/normalize'
-import type { MonthData, Tx, ParserIssue, Period } from '../types'
+import type { MonthData, Tx, ParserIssue, Period, BankAccount, UpcomingItem, Era } from '../types'
 
 export interface MonthGrids {
   values: (string | number | null)[][]
@@ -17,6 +14,11 @@ export interface MonthGrids {
 const INCOME_LAST_ROW = 40
 const EXPENSE_LAST_ROW = 80
 const CARRYOVER_LABEL = 'last month balance'
+const BANK_LAST_ROW = 60
+const UPCOMING_LAST_ROW = 100
+const TOTAL_LABEL = 'total'
+const EXPECTED_ACTUAL_LABEL = 'expected-actual'
+const BALANCE_AFTER_FUTURE_LABEL = 'balance after future expense'
 
 /** A1 column letters ('A', 'B', ..., 'Z', 'AA', ...) → 0-based index. */
 function colToIndex(col: string): number {
@@ -160,6 +162,117 @@ function parseSummaryBlock(
   return { summary: { totalIncome, totalExpense, balance, household }, householdRows }
 }
 
+/** Scans `col{row}` for rows 2..lastRow for the first cell whose trimmed
+ * lowercase value equals `label` exactly. Returns -1 if not found. Used to
+ * locate the bank/upcoming `Total` marker rows — never hardcode a row. */
+function findLabelRow(
+  values: (string | number | null)[][], col: string, lastRow: number, label: string
+): number {
+  for (let row = 2; row <= lastRow; row++) {
+    const raw = cell(values, `${col}${row}`)
+    if (isBlank(raw)) continue
+    if (String(raw).trim().toLowerCase() === label) return row
+  }
+  return -1
+}
+
+interface BanksResult {
+  banks: BankAccount[]; bankTotal: number | null
+  expectedActual: number | null; balanceAfterFuture: number | null
+}
+
+/** Bank balances block (workbook-map.md §1.1): col I labels / col J amounts,
+ * rows 2..{BANK_LAST_ROW}, terminated by the `Total` label (never a fixed
+ * row — locate it). Rows above `Total` become BankAccount[]; the `Total`
+ * row's J is bankTotal. After `Total`, scan by label PREFIX (not fixed
+ * offset) for `Expected-Actual` and `Balance After future Expense` — any
+ * other row in between (e.g. old scratch/debt rows) is ignored and its J
+ * cell is never read, so a stray `#REF!` there produces no issue. Missing
+ * `Total` marker → 'marker-not-found' issue, everything empty/null. */
+function parseBanksBlock(tab: string, values: (string | number | null)[][], issues: ParserIssue[]): BanksResult {
+  const totalRow = findLabelRow(values, 'I', BANK_LAST_ROW, TOTAL_LABEL)
+  if (totalRow === -1) {
+    issues.push({
+      sheet: tab, kind: 'marker-not-found',
+      detail: `bank "Total" label not found in column I (rows 2-${BANK_LAST_ROW})`,
+    })
+    return { banks: [], bankTotal: null, expectedActual: null, balanceAfterFuture: null }
+  }
+
+  const banks: BankAccount[] = []
+  for (let row = 2; row < totalRow; row++) {
+    const labelRaw = cell(values, `I${row}`)
+    if (isBlank(labelRaw)) continue
+    const name = String(labelRaw).trim()
+    const amountRef = `J${row}`
+    const { amountEUR } = readAmount(cell(values, amountRef), tab, amountRef, issues)
+    if (amountEUR !== null) banks.push({ name, amountEUR })
+  }
+
+  const bankTotalRef = `J${totalRow}`
+  const { amountEUR: bankTotal } = readAmount(cell(values, bankTotalRef), tab, bankTotalRef, issues)
+
+  let expectedActual: number | null = null
+  let balanceAfterFuture: number | null = null
+  for (let row = totalRow + 1; row <= BANK_LAST_ROW; row++) {
+    const labelRaw = cell(values, `I${row}`)
+    if (isBlank(labelRaw)) continue
+    const label = String(labelRaw).trim().toLowerCase()
+    const amountRef = `J${row}`
+    if (label.startsWith(EXPECTED_ACTUAL_LABEL)) {
+      expectedActual = readAmount(cell(values, amountRef), tab, amountRef, issues).amountEUR
+    } else if (label.startsWith(BALANCE_AFTER_FUTURE_LABEL)) {
+      balanceAfterFuture = readAmount(cell(values, amountRef), tab, amountRef, issues).amountEUR
+    }
+  }
+
+  return { banks, bankTotal, expectedActual, balanceAfterFuture }
+}
+
+/** Upcoming block (workbook-map.md §1.1): col M name / N total / O to-pay,
+ * rows 2..{UPCOMING_LAST_ROW}, terminated by the `Total` label (row *varies*
+ * per workbook-map.md §1.4 — always locate by label). Missing `Total`
+ * marker → 'marker-not-found' issue, empty array. */
+function parseUpcomingBlock(tab: string, values: (string | number | null)[][], issues: ParserIssue[]): UpcomingItem[] {
+  const totalRow = findLabelRow(values, 'M', UPCOMING_LAST_ROW, TOTAL_LABEL)
+  if (totalRow === -1) {
+    issues.push({
+      sheet: tab, kind: 'marker-not-found',
+      detail: `upcoming "Total" label not found in column M (rows 2-${UPCOMING_LAST_ROW})`,
+    })
+    return []
+  }
+
+  const upcoming: UpcomingItem[] = []
+  for (let row = 2; row < totalRow; row++) {
+    const labelRaw = cell(values, `M${row}`)
+    if (isBlank(labelRaw)) continue
+    const name = String(labelRaw).trim()
+    const totalRef = `N${row}`
+    const toPayRef = `O${row}`
+    const total = readAmount(cell(values, totalRef), tab, totalRef, issues).amountEUR
+    const toPay = readAmount(cell(values, toPayRef), tab, toPayRef, issues).amountEUR
+    upcoming.push({ name, total, toPay })
+  }
+  return upcoming
+}
+
+/** Era gating for the bank-balances block (workbook-map.md §1.2): absent in
+ * 2019v1, present from JUN in 2019v2 (i.e. for the whole 2019v2 era), and
+ * always present in `full`/`v2025`. */
+function banksExpectedFor(era: Era): boolean {
+  return era !== '2019v1'
+}
+
+/** Era gating for the upcoming block (workbook-map.md §1.2): absent in
+ * 2019v1, present only from JUL in 2019v2 (JUN has banks but not upcoming),
+ * always present in `full`/`v2025`. */
+function upcomingExpectedFor(era: Era, period: Period): boolean {
+  if (era === '2019v1') return false
+  if (era === '2019v2') return period.month >= 7
+  return true
+}
+
 /** MonthData for tabs that fail period resolution, or as the pre-fill base. */
 function emptyMonthData(tab: string, period: Period, era: MonthData['era'], issues: ParserIssue[]): MonthData {
   return {
@@ -173,11 +286,10 @@ function emptyMonthData(tab: string, period: Period, era: MonthData['era'], issu
 }
 
 /**
- * Parses a month-ledger tab's income + expenses blocks (workbook-map.md §1.1)
- * plus period/era resolution and the carryover chain start value. Never
- * throws: an unrecognized tab name or malformed cell produces a ParserIssue
- * instead. Other MonthData fields (summary/banks/upcoming/...) are left as
- * placeholders for later tasks.
+ * Parses a month-ledger tab's income/expenses/summary/bank/upcoming blocks
+ * (workbook-map.md §1.1) plus period/era resolution and the carryover chain
+ * start value. Never throws: an unrecognized tab name or malformed cell
+ * produces a ParserIssue instead.
  */
 export function parseMonth(tab: string, grids: MonthGrids): MonthData {
   const issues: ParserIssue[] = []
@@ -195,6 +307,23 @@ export function parseMonth(tab: string, grids: MonthGrids): MonthData {
   for (const tx of expenses) {
     if (householdRowSet.has(tx.row)) tx.household = true
   }
+
+  let banks: BankAccount[] = []
+  let bankTotal: number | null = null
+  let expectedActual: number | null = null
+  let balanceAfterFuture: number | null = null
+  if (banksExpectedFor(era)) {
+    ;({ banks, bankTotal, expectedActual, balanceAfterFuture } = parseBanksBlock(tab, values, issues))
+  }
+
+  let upcoming: UpcomingItem[] = []
+  if (upcomingExpectedFor(era, period)) {
+    upcoming = parseUpcomingBlock(tab, values, issues)
+  }
+
   const base = emptyMonthData(tab, period, era, issues)
-  return { ...base, income, expenses, carryover, summary }
+  return {
+    ...base, income, expenses, carryover, summary,
+    banks, bankTotal, expectedActual, balanceAfterFuture, upcoming,
+  }
 }
