@@ -115,15 +115,17 @@ function householdCellFor(era: MonthData['era']): string {
 }
 
 /**
- * Reads a summary cell (G1/G2/G3/household) as a number. Blank is *not*
- * expected here (unlike Tx amounts) — any non-number (including blank)
- * records a 'bad-number' issue and resolves to null.
+ * Reads a summary cell (G1/G2/G3/household) as a number. A blank cell (null
+ * or '' after trim) means "not tracked that month" — same reasoning as a
+ * blank expense amount (workbook-map.md) — and resolves to null with no
+ * issue. Any other non-number still records a 'bad-number' issue.
  */
 function readSummaryNumber(
   values: (string | number | null)[][], ref: string, tab: string, issues: ParserIssue[]
 ): number | null {
   const raw = cell(values, ref)
   if (typeof raw === 'number') return raw
+  if (isBlank(typeof raw === 'string' ? raw.trim() : raw)) return null
   issues.push({ sheet: tab, cell: ref, kind: 'bad-number', detail: `non-numeric summary value "${String(raw)}" at ${ref}`, raw })
   return null
 }
@@ -150,10 +152,15 @@ function parseSummaryBlock(
   const householdRows: number[] = []
   const formula = formulas[householdRef]
   if (!formula) {
-    issues.push({
-      sheet: tab, cell: householdRef, kind: 'missing-formula',
-      detail: `no household formula found at ${householdRef} for era "${era}"`,
-    })
+    // Blank household cell (household === null, not tracked that month) with
+    // no formula is a legitimate sheet state (real DEC_23) — no issue. The
+    // issue only fires when a value exists yet rows can't be tagged.
+    if (household !== null) {
+      issues.push({
+        sheet: tab, cell: householdRef, kind: 'missing-formula',
+        detail: `no household formula found at ${householdRef} for era "${era}"`,
+      })
+    }
   } else {
     const rowMatches = formula.matchAll(/D(\d+)/g)
     for (const m of rowMatches) householdRows.push(Number(m[1]))
@@ -248,14 +255,21 @@ function parseBanksBlock(tab: string, values: (string | number | null)[][], issu
 /** Upcoming block (workbook-map.md §1.1): col M name / N total / O to-pay,
  * rows 2..{UPCOMING_LAST_ROW}, terminated by the `Total` label (row *varies*
  * per workbook-map.md §1.4 — always locate by label). Missing `Total`
- * marker → 'marker-not-found' issue, empty array. */
-function parseUpcomingBlock(tab: string, values: (string | number | null)[][], issues: ParserIssue[]): UpcomingItem[] {
+ * marker → empty array, plus a 'marker-not-found' issue *only* when the era
+ * requires the block. 2019v2 real sheets have no upcoming block at all in
+ * JUL/AUG (it only appears from later 2019v2 months) — a legitimate absence,
+ * not a parser error, so `required=false` suppresses the issue there. */
+function parseUpcomingBlock(
+  tab: string, values: (string | number | null)[][], issues: ParserIssue[], required: boolean
+): UpcomingItem[] {
   const totalRow = findLabelRow(values, 'M', UPCOMING_LAST_ROW, TOTAL_LABEL)
   if (totalRow === -1) {
-    issues.push({
-      sheet: tab, kind: 'marker-not-found',
-      detail: `upcoming "Total" label not found in column M (rows 2-${UPCOMING_LAST_ROW})`,
-    })
+    if (required) {
+      issues.push({
+        sheet: tab, kind: 'marker-not-found',
+        detail: `upcoming "Total" label not found in column M (rows 2-${UPCOMING_LAST_ROW})`,
+      })
+    }
     return []
   }
 
@@ -287,6 +301,15 @@ function upcomingExpectedFor(era: Era, period: Period): boolean {
   if (era === '2019v1') return false
   if (era === '2019v2') return period.month >= 7
   return true
+}
+
+/** Whether a missing upcoming `Total` marker is a parser issue. Real 2019v2
+ * sheets have JUL/AUG months with no upcoming block at all (it only starts
+ * appearing later in 2019v2) — a legitimate sheet state, not corruption, so
+ * 2019v2 tolerates an absent marker silently. `full`/`v2025` real data
+ * confirms the block is always present, so it stays required there. */
+function upcomingRequiredFor(era: Era): boolean {
+  return era !== '2019v2'
 }
 
 /** MonthData for tabs that fail period resolution, or as the pre-fill base. */
@@ -334,7 +357,7 @@ export function parseMonth(tab: string, grids: MonthGrids): MonthData {
 
   let upcoming: UpcomingItem[] = []
   if (upcomingExpectedFor(era, period)) {
-    upcoming = parseUpcomingBlock(tab, values, issues)
+    upcoming = parseUpcomingBlock(tab, values, issues, upcomingRequiredFor(era))
   }
 
   const base = emptyMonthData(tab, period, era, issues)
