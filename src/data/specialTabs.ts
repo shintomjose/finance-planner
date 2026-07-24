@@ -32,6 +32,18 @@ function cacheKey(key: SpecialTabKey): string {
   return `special:${key}`
 }
 
+/** The LITERAL sheet tab title for a SPECIAL_TABS key — e.g. `MUTUAL_FUNDS`
+ * -> `MUTUAL FUNDS` — derived from the range string (everything before
+ * `!`, with surrounding quotes stripped if the tab name needed quoting for
+ * the A1 range). `ParserIssue.sheet` must carry this, not the SPECIAL_TABS
+ * key: every other issue emitter (month parsers, orchestrator.ts) and every
+ * consumer that matches on `sheet` (banner.ts, ParserHealth) key off the
+ * real tab name as it appears in the spreadsheet. */
+function tabTitleOf(key: SpecialTabKey): string {
+  const title = SPECIAL_TABS[key].range.split('!')[0]
+  return title.startsWith("'") && title.endsWith("'") ? title.slice(1, -1) : title
+}
+
 /** All six special tabs are members of the "live" set (spec §3/SKILL.md
  * Cache row) — same staleness policy as the current-month tab in
  * orchestrator.ts: any cache hit within LIVE_TTL_MS wins, otherwise refetch. */
@@ -72,7 +84,7 @@ export async function loadSpecialTabs(
         // for that one range. Record it and keep processing the rest
         // (partial failure never sinks the whole call).
         issues.push({
-          sheet: key,
+          sheet: tabTitleOf(key),
           kind: 'fetch-failed',
           detail: `no data returned for ${SPECIAL_TABS[key].range}`,
         })
@@ -84,7 +96,7 @@ export async function loadSpecialTabs(
         await putCached(cacheKey(key), grid)
       } catch (err) {
         issues.push({
-          sheet: key,
+          sheet: tabTitleOf(key),
           kind: 'cache-error',
           detail: `failed to write cache: ${err instanceof Error ? err.message : String(err)}`,
         })
