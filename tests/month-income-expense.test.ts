@@ -89,6 +89,17 @@ describe('empty-row skipping', () => {
   })
 })
 
+describe('income: blank amount → planned', () => {
+  it('AUG row 6 (Pfand, blank B) → planned income, amountEUR null, no bad-number issue', () => {
+    const m = parseMonth('AUG', AUG as any)
+    const pfand = m.income.find(t => t.normLabel === 'pfand')
+    expect(pfand).toBeDefined()
+    expect(pfand!.planned).toBe(true)
+    expect(pfand!.amountEUR).toBeNull()
+    expect(m.issues.some(i => i.kind === 'bad-number' && i.cell === 'B6')).toBe(false)
+  })
+})
+
 describe('era coverage (all four template eras from workbook-map.md §1.2)', () => {
   it('AUG (2019 v2): carryover moves to row 3, income/expenses still parse', () => {
     const m = parseMonth('AUG', AUG as any)
