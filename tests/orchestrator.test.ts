@@ -74,6 +74,11 @@ it('non-auth fetch failure on a non-current tab records fetch-failed and continu
   expect(r.months.map((m: any) => m.tab)).toEqual(['AUG_20'])
   expect(r.issues.some((i) => i.kind === 'fetch-failed' && i.sheet === 'JUL_20')).toBe(true)
 })
+it('returns months sorted chronologically by period, not tab-listing order', async () => {
+  const c = fakeClient(['MAR_21', 'JAN_22', 'FEB_21'])
+  const r = await loadMonths(c, NOW)
+  expect(r.months.map((m: any) => m.tab)).toEqual(['FEB_21', 'MAR_21', 'JAN_22'])
+})
 it('fetches in chunks of at most 5 concurrent requests', async () => {
   const tabs = ['SEP_18', 'OCT_18', 'NOV_18', 'DEC_18', 'JAN_19', 'FEB_19', 'MAR_19']
   let inFlight = 0

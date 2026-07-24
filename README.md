@@ -87,9 +87,10 @@ on private repos). Then, in **Settings → Pages**, set **Source** to
 
 ### Notes
 
-- OAuth access tokens last about 1 hour; the app silently re-prompts GIS for
-  a new one when a call fails with an auth error, which may show a brief
-  consent popup.
+- OAuth access tokens last about 1 hour. When a call fails with an auth
+  error, the app returns to the sign-in screen with a "Session expired" note
+  — one click re-authenticates via GIS. (Silent, automatic re-auth is
+  planned for a later iteration.)
 - Because the app stays in **Testing** publishing status, Google shows a
   "Google hasn't verified this app" consent screen and the sign-in popup can
   reappear once per browser session. This is expected for personal-use apps

@@ -35,28 +35,61 @@ interface SpreadsheetGetResponse { sheets?: { properties?: { title?: string } }[
  * their valueRanges — position drives the key mapping below. */
 const FORMULA_KEYS = ['B3', 'B4', 'G4', 'G6'] as const
 
+/** Max number of retries after an initial 429 (so up to MAX_429_RETRIES + 1
+ * requests total go out for a single logical call). */
+const MAX_429_RETRIES = 3
+
 export class SheetsClient {
   private base = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.sheetId}`
   private getToken: () => string | null
   private fetchFn: typeof fetch
+  private sleepFn: (ms: number) => Promise<void>
 
-  constructor(getToken: () => string | null, fetchFn: typeof fetch = fetch) {
+  constructor(
+    getToken: () => string | null,
+    fetchFn: typeof fetch = fetch,
+    sleepFn: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  ) {
     this.getToken = getToken
     this.fetchFn = fetchFn
+    this.sleepFn = sleepFn
   }
 
-  /** GET wrapper: attaches the bearer token (if any) and translates 401/400
-   * into AuthExpiredError/TabNotFoundError. `tab` is only used to build the
-   * TabNotFoundError message when a 400 comes back. */
+  /** GET wrapper: attaches the bearer token (if any), retries on 429 with
+   * backoff, and translates 401/400 into AuthExpiredError/TabNotFoundError.
+   * `tab` is only passed by callers that are requesting a specific tab
+   * (fetchMonthGrids) — a 400 there means "Unable to parse range" for that
+   * tab, i.e. TabNotFoundError. A 400 with no `tab` (listMonthTabs, which
+   * addresses the whole spreadsheet, not a tab) is some other bad-request
+   * condition and surfaces as a generic Error carrying the status, not a
+   * misleading TabNotFoundError.
+   *
+   * On 429 (rate limited), retries the same request up to MAX_429_RETRIES
+   * times, waiting the `Retry-After` header (seconds) if present, else
+   * exponential backoff 1s/2s/4s. After exhausting retries, rejects with a
+   * generic Error rather than surfacing the raw 429. */
   private async request(url: string, tab?: string): Promise<any> {
     const token = this.getToken()
     const headers: Record<string, string> = {}
     if (token) headers.Authorization = `Bearer ${token}`
-    const res = await this.fetchFn(url, { headers })
-    if (res.status === 401) throw new AuthExpiredError()
-    if (res.status === 400) throw new TabNotFoundError(tab ?? url)
-    if (!res.ok) throw new Error(`Sheets API error ${res.status}: ${url}`)
-    return res.json()
+
+    for (let retry = 0; ; retry++) {
+      const res = await this.fetchFn(url, { headers })
+      if (res.status === 429) {
+        if (retry >= MAX_429_RETRIES) throw new Error(`Sheets API rate limited (429) after ${MAX_429_RETRIES} retries: ${url}`)
+        const retryAfter = res.headers.get('Retry-After')
+        const waitMs = retryAfter ? Number(retryAfter) * 1000 : 2 ** retry * 1000
+        await this.sleepFn(waitMs)
+        continue
+      }
+      if (res.status === 401) throw new AuthExpiredError()
+      if (res.status === 400) {
+        if (tab) throw new TabNotFoundError(tab)
+        throw new Error(`Sheets API error ${res.status}: ${url}`)
+      }
+      if (!res.ok) throw new Error(`Sheets API error ${res.status}: ${url}`)
+      return res.json()
+    }
   }
 
   /** spreadsheets.get, fields-limited to titles → isMonthTab AND-filtered

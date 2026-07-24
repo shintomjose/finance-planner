@@ -83,5 +83,10 @@ export async function loadMonths(client: SheetsClient, now: Date): Promise<LoadR
     issues.push(...monthData.issues) // aggregate convenience concat; issues also stay on monthData
   }
 
+  // Tab listing order (spreadsheets.get) isn't guaranteed chronological —
+  // sort so consumers (e.g. Overview's `.at(-1)` for "current month") can
+  // rely on ascending (year, month) order.
+  months.sort((a, b) => a.period.year - b.period.year || a.period.month - b.period.month)
+
   return { months, issues }
 }
