@@ -14,7 +14,7 @@ import { AuthExpiredError, SheetsClient } from '../api/sheets'
 import { loadMonths } from '../data/orchestrator'
 import { loadWithSilentReauth } from '../lib/authRetry'
 import { bannerFor } from '../lib/banner'
-import { currentTabName, pickDisplayedMonth } from '../lib/period'
+import { pickDisplayedMonth } from '../lib/period'
 import type { MonthData, ParserIssue } from '../types'
 import { Overview } from './Overview'
 import { ParserHealth } from './ParserHealth'
@@ -89,7 +89,10 @@ export default function App() {
     )
   }
 
-  const displayedTab = pickDisplayedMonth(state.months, now)?.tab ?? currentTabName(now)
+  // `state.months` is non-empty here (the load() branch above routes
+  // zero-month results to the 'error' state before ever reaching 'ready'),
+  // so pickDisplayedMonth always returns a month — no fallback needed.
+  const displayedTab = pickDisplayedMonth(state.months, now)!.tab
   const { bannerForDisplayedTab, otherFailedTabCount } = bannerFor(state.issues, displayedTab)
 
   return (
