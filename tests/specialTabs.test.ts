@@ -106,6 +106,18 @@ it('one null valueRange -> fetch-failed issue for that key only, others still re
   expect(c2.fetchRanges).toHaveBeenCalledWith([SPECIAL_TABS.SACHIN.range])
 })
 
+it('null valueRange issue.sheet is the LITERAL tab title (unquoted, spaces intact), not the SPECIAL_TABS key — banner.ts/ParserHealth match on real tab names', async () => {
+  const now = new Date()
+  const c = {
+    fetchRanges: vi.fn(async (ranges: string[]) =>
+      ranges.map((r) => (r === SPECIAL_TABS.MUTUAL_FUNDS.range ? null : [[1]])),
+    ),
+  } as any
+  const r = await loadSpecialTabs(c, now)
+  const issue = r.issues.find((i) => i.kind === 'fetch-failed')
+  expect(issue?.sheet).toBe('MUTUAL FUNDS')
+})
+
 it('AuthExpiredError propagates instead of being swallowed into issues', async () => {
   const c = {
     fetchRanges: vi.fn(async () => { throw new AuthExpiredError() }),

@@ -223,3 +223,13 @@ it('fetchRanges: 401 -> AuthExpiredError', async () => {
   const c = new SheetsClient(() => 'tok', f as any)
   await expect(c.fetchRanges(['A!A1'])).rejects.toBeInstanceOf(AuthExpiredError)
 })
+
+it('fetchRanges: a caller-pre-quoted range (space in tab name) is not double-quoted or double-encoded', async () => {
+  const f = vi.fn().mockImplementation(() => ok({ valueRanges: [{ values: [[1]] }] }))
+  const c = new SheetsClient(() => 'tok', f as any)
+  await c.fetchRanges(["'MUTUAL FUNDS'!A1:B2"])
+  const url = String(f.mock.calls[0][0])
+  const encoded = encodeURIComponent("'MUTUAL FUNDS'!A1:B2")
+  const occurrences = url.split(encoded).length - 1
+  expect(occurrences).toBe(1)
+})
