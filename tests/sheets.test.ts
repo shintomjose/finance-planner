@@ -119,3 +119,64 @@ it('fetchMonthGrids: missing values gracefully → empty grid, no crash', async 
   expect(grids.values).toEqual([])
   expect(grids.formulas).toEqual({})
 })
+
+it('fetchManyMonthGrids: 2 tabs issues exactly 2 HTTP calls, ranges for both tabs in each, positional mapping correct', async () => {
+  const f = vi.fn().mockImplementation((u: any) => {
+    const url = String(u)
+    if (url.includes('FORMULA')) {
+      return ok({
+        valueRanges: [
+          { values: [['=A1JAN'], ['=A2JAN']] }, { values: [] }, { values: [['=G6JAN']] },
+          { values: [['=A1FEB'], ['=A2FEB']] }, { values: [] }, { values: [['=G6FEB']] },
+        ],
+      })
+    }
+    return ok({ valueRanges: [{ values: [[1, 1]] }, { values: [[2, 2]] }] })
+  })
+  const c = new SheetsClient(() => 'tok', f as any)
+  const { grids, failures } = await c.fetchManyMonthGrids(['JAN_22', 'FEB_22'])
+  expect(f).toHaveBeenCalledTimes(2)
+  const valuesUrl = String(f.mock.calls[0][0])
+  expect(valuesUrl).toContain(encodeURIComponent("'JAN_22'!A1:P100"))
+  expect(valuesUrl).toContain(encodeURIComponent("'FEB_22'!A1:P100"))
+  const formulasUrl = String(f.mock.calls[1][0])
+  expect(formulasUrl).toContain(encodeURIComponent("'JAN_22'!B3:B4"))
+  expect(formulasUrl).toContain(encodeURIComponent("'FEB_22'!G6"))
+  expect(grids.get('JAN_22')?.values).toEqual([[1, 1]])
+  expect(grids.get('FEB_22')?.values).toEqual([[2, 2]])
+  expect(grids.get('JAN_22')?.formulas).toEqual({ B3: '=A1JAN', B4: '=A2JAN', G6: '=G6JAN' })
+  expect(grids.get('FEB_22')?.formulas).toEqual({ B3: '=A1FEB', B4: '=A2FEB', G6: '=G6FEB' })
+  expect(failures.size).toBe(0)
+})
+
+it('fetchManyMonthGrids: empty tabs array resolves without any HTTP call', async () => {
+  const f = vi.fn()
+  const c = new SheetsClient(() => 'tok', f as any)
+  const { grids, failures } = await c.fetchManyMonthGrids([])
+  expect(f).not.toHaveBeenCalled()
+  expect(grids.size).toBe(0)
+  expect(failures.size).toBe(0)
+})
+
+it('fetchManyMonthGrids: multi-tab 400 falls back to per-tab fetches — good tab resolves, bad tab surfaces TabNotFoundError', async () => {
+  const f = vi.fn().mockImplementation((u: any) => {
+    const url = String(u)
+    const isBatchAttempt = url.includes("'GOOD'") && url.includes("'NOPE'")
+    if (isBatchAttempt) return Promise.resolve(new Response('', { status: 400 }))
+    if (url.includes("'NOPE'")) return Promise.resolve(new Response('', { status: 400 }))
+    if (url.includes('FORMULA')) return ok({ valueRanges: [{ values: [['=A1']] }, { values: [] }, { values: [] }] })
+    return ok({ valueRanges: [{ values: [[9]] }] })
+  })
+  const c = new SheetsClient(() => 'tok', f as any)
+  const { grids, failures } = await c.fetchManyMonthGrids(['GOOD', 'NOPE'])
+  expect(grids.get('GOOD')?.values).toEqual([[9]])
+  expect(grids.has('NOPE')).toBe(false)
+  expect(failures.get('NOPE')).toBeInstanceOf(TabNotFoundError)
+  expect(failures.size).toBe(1)
+})
+
+it('fetchManyMonthGrids: AuthExpiredError propagates rather than being swallowed into failures', async () => {
+  const f = vi.fn().mockResolvedValue(new Response('', { status: 401 }))
+  const c = new SheetsClient(() => 'tok', f as any)
+  await expect(c.fetchManyMonthGrids(['A', 'B'])).rejects.toBeInstanceOf(AuthExpiredError)
+})

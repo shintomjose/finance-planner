@@ -47,7 +47,10 @@ export class SheetsClient {
 
   constructor(
     getToken: () => string | null,
-    fetchFn: typeof fetch = fetch,
+    // Wrap instead of referencing `fetch` directly: storing the bare function
+    // and calling it as `this.fetchFn(...)` rebinds `this` to the client and
+    // browsers throw "Illegal invocation" (fetch requires `this === window`).
+    fetchFn: typeof fetch = (...args) => fetch(...args),
     sleepFn: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   ) {
     this.getToken = getToken
@@ -87,7 +90,13 @@ export class SheetsClient {
         if (tab) throw new TabNotFoundError(tab)
         throw new Error(`Sheets API error ${res.status}: ${url}`)
       }
-      if (!res.ok) throw new Error(`Sheets API error ${res.status}: ${url}`)
+      if (!res.ok) {
+        // Include the API's own reason (SERVICE_DISABLED, PERMISSION_DENIED,
+        // ACCESS_TOKEN_SCOPE_INSUFFICIENT, …) — status alone is undiagnosable.
+        const body = await res.text().catch(() => '')
+        const reason = body.slice(0, 300)
+        throw new Error(`Sheets API error ${res.status}${reason ? `: ${reason}` : ''} (${url})`)
+      }
       return res.json()
     }
   }
@@ -101,28 +110,98 @@ export class SheetsClient {
     return titles.filter((t) => isMonthTab(t) && !CONFIG.deadTabs.includes(t))
   }
 
-  /** Two batchGet calls: (1) the full grid, UNFORMATTED_VALUE + SERIAL_NUMBER
-   * dates; (2) the four formula cells the parser needs (household refs +
-   * carryover-adjacent cells), FORMULA render. Ragged/short API rows are
-   * passed through as-is — parseMonth's cell() already treats missing
-   * cells/rows as null (verified in T5), so no padding here. */
+  /** Single-tab convenience wrapper around fetchManyMonthGrids, preserving
+   * its historical contract: rejects directly with TabNotFoundError (rather
+   * than returning it via `failures`) when the tab doesn't exist. */
   async fetchMonthGrids(tab: string): Promise<MonthGrids> {
-    const quoted = `'${tab}'`
+    const { grids, failures } = await this.fetchManyMonthGrids([tab])
+    const failure = failures.get(tab)
+    if (failure) throw failure
+    const grid = grids.get(tab)
+    if (!grid) throw new Error(`Sheets API returned no data for tab "${tab}"`)
+    return grid
+  }
 
+  /** Cross-tab batching (rate-limit fix): fetches grids for MANY tabs with
+   * exactly 2 HTTP requests total — one values:batchGet spanning every
+   * tab's `A1:P100` range, one spanning every tab's 3 formula cells
+   * (B3:B4, G4, G6) — instead of 2 requests PER tab. The API returns
+   * valueRanges positionally, in request order, even for empty ranges, so
+   * results are mapped back onto tabs by index (same assumption
+   * fetchMonthGrids/mapFormulas already relied on for a single tab).
+   *
+   * Empty `tabs` resolves immediately with empty maps — no HTTP call.
+   *
+   * Error handling: AuthExpiredError always propagates (caller re-auths).
+   * For a single-tab call, any other error propagates directly (preserves
+   * fetchMonthGrids's historical throw-based contract, notably 400 →
+   * TabNotFoundError). For a multi-tab batch, a single bad tab (400 —
+   * "Unable to parse range") would otherwise sink every tab in the batch;
+   * instead we retry the batch one tab at a time and collect each tab's
+   * outcome into `grids` (success) or `failures` (error, e.g.
+   * TabNotFoundError) so one bad tab never blocks the rest. */
+  async fetchManyMonthGrids(tabs: string[]): Promise<ManyGridsResult> {
+    if (tabs.length === 0) return { grids: new Map(), failures: new Map() }
+
+    try {
+      return await this.fetchManyMonthGridsBatch(tabs)
+    } catch (err) {
+      if (err instanceof AuthExpiredError) throw err
+      if (tabs.length === 1) throw err // nothing to fall back to — propagate as-is
+
+      const grids = new Map<string, MonthGrids>()
+      const failures = new Map<string, Error>()
+      for (const tab of tabs) {
+        try {
+          const single = await this.fetchManyMonthGrids([tab])
+          const grid = single.grids.get(tab)
+          if (grid) grids.set(tab, grid)
+        } catch (e) {
+          if (e instanceof AuthExpiredError) throw e
+          failures.set(tab, e instanceof Error ? e : new Error(String(e)))
+        }
+      }
+      return { grids, failures }
+    }
+  }
+
+  /** The actual 2-request batchGet pair for a group of tabs, with no
+   * fallback logic — a failure here (400, 401, etc.) simply throws, letting
+   * fetchManyMonthGrids decide whether to retry per-tab. */
+  private async fetchManyMonthGridsBatch(tabs: string[]): Promise<ManyGridsResult> {
+    const quotedTabs = tabs.map((tab) => `'${tab}'`)
+    // Only a single-tab batch can attribute a 400 to a specific tab.
+    const soleTab = tabs.length === 1 ? tabs[0] : undefined
+
+    const valuesRanges = quotedTabs.map((q) => `${q}!A1:P100`)
+    const valuesQuery = valuesRanges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')
     const valuesUrl =
-      `${this.base}/values:batchGet?ranges=${encodeURIComponent(`${quoted}!A1:P100`)}` +
+      `${this.base}/values:batchGet?${valuesQuery}` +
       `&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER`
-    const valuesData = (await this.request(valuesUrl, tab)) as BatchGetResponse
-    const values = (valuesData.valueRanges?.[0]?.values ?? []) as MonthGrids['values']
+    const valuesData = (await this.request(valuesUrl, soleTab)) as BatchGetResponse
+    const valueRanges = valuesData.valueRanges ?? []
 
-    const formulaRanges = [`${quoted}!B3:B4`, `${quoted}!G4`, `${quoted}!G6`]
+    const formulaRanges: string[] = []
+    for (const q of quotedTabs) formulaRanges.push(`${q}!B3:B4`, `${q}!G4`, `${q}!G6`)
     const formulaRangesQuery = formulaRanges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')
     const formulasUrl = `${this.base}/values:batchGet?${formulaRangesQuery}&valueRenderOption=FORMULA`
-    const formulasData = (await this.request(formulasUrl, tab)) as BatchGetResponse
-    const formulas = mapFormulas(formulasData.valueRanges ?? [])
+    const formulasData = (await this.request(formulasUrl, soleTab)) as BatchGetResponse
+    const formulaValueRanges = formulasData.valueRanges ?? []
 
-    return { values, formulas }
+    const grids = new Map<string, MonthGrids>()
+    tabs.forEach((tab, i) => {
+      const values = (valueRanges[i]?.values ?? []) as MonthGrids['values']
+      const formulas = mapFormulas(formulaValueRanges.slice(i * 3, i * 3 + 3))
+      grids.set(tab, { values, formulas })
+    })
+
+    return { grids, failures: new Map() }
   }
+}
+
+export interface ManyGridsResult {
+  grids: Map<string, MonthGrids>
+  failures: Map<string, Error>
 }
 
 /** Maps the fixed-order valueRanges from the formulas batchGet back onto

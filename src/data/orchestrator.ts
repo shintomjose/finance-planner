@@ -7,7 +7,7 @@ import { currentTabName } from '../lib/period'
 import { parseMonth } from '../parse/month'
 import type { MonthGrids } from '../parse/month'
 import { getCached, putCached } from '../cache/db'
-import { AuthExpiredError, TabNotFoundError } from '../api/sheets'
+import { TabNotFoundError } from '../api/sheets'
 import type { SheetsClient } from '../api/sheets'
 import type { MonthData, ParserIssue } from '../types'
 
@@ -22,32 +22,26 @@ export interface LoadResult {
  * has closed. */
 export const LIVE_TTL_MS = 10 * 60 * 1000
 
-/** batchGet quota kindness: fetch at most this many tabs concurrently,
- * sequential between chunks. */
-const CHUNK_SIZE = 5
+/** batchGet quota kindness: group tabs needing a network fetch into batches
+ * of at most this many, each batch costing exactly 2 HTTP requests via
+ * SheetsClient.fetchManyMonthGrids (spanning every tab in the batch in one
+ * values call + one formulas call), fetched sequentially between batches.
+ * This replaces the old per-tab-concurrency chunking — at 91 tabs that was
+ * up to ~182 requests against a 60 reads/min/user quota; batches of 15 cut
+ * a full 91-tab cold load to ~14 requests. */
+const BATCH_TABS = 15
 
-/** Resolves one tab's grids from cache-or-network per the freshness policy.
- * Returns null (never throws) for a TabNotFoundError on the current-month
- * tab — the caller records 'missing-current-month' and skips it. Any other
- * error (AuthExpiredError included) propagates to the caller. */
-async function resolveGrids(
-  client: SheetsClient, tab: string, currentTab: string, now: Date
-): Promise<MonthGrids | null> {
+/** Resolves one tab's grids from cache only (no network) per the freshness
+ * policy: historical tabs are immutable (any cache hit wins), the
+ * current-month tab is "live" and refetched once its cached copy exceeds
+ * LIVE_TTL_MS. Returns null when the tab needs a network fetch. */
+async function resolveCachedGrids(tab: string, currentTab: string, now: Date): Promise<MonthGrids | null> {
   const isLive = tab === currentTab
   const cached = await getCached(tab)
-  if (cached) {
-    if (!isLive) return cached.grids // immutable: any cache hit, never refetch
-    const age = now.getTime() - cached.fetchedAt
-    if (age <= LIVE_TTL_MS) return cached.grids
-  }
-  try {
-    const grids = await client.fetchMonthGrids(tab)
-    await putCached(tab, grids)
-    return grids
-  } catch (err) {
-    if (isLive && err instanceof TabNotFoundError) return null
-    throw err
-  }
+  if (!cached) return null
+  if (!isLive) return cached.grids // immutable: any cache hit, never refetch
+  const age = now.getTime() - cached.fetchedAt
+  return age <= LIVE_TTL_MS ? cached.grids : null
 }
 
 export async function loadMonths(client: SheetsClient, now: Date): Promise<LoadResult> {
@@ -55,21 +49,28 @@ export async function loadMonths(client: SheetsClient, now: Date): Promise<LoadR
   const currentTab = currentTabName(now)
   const issues: ParserIssue[] = []
   const gridsByTab = new Map<string, MonthGrids>()
+  const toFetch: string[] = []
 
-  for (let i = 0; i < tabs.length; i += CHUNK_SIZE) {
-    const chunk = tabs.slice(i, i + CHUNK_SIZE)
-    const settled = await Promise.allSettled(chunk.map((tab) => resolveGrids(client, tab, currentTab, now)))
-    for (let j = 0; j < chunk.length; j++) {
-      const tab = chunk[j]
-      const outcome = settled[j]
-      if (outcome.status === 'fulfilled') {
-        if (outcome.value) gridsByTab.set(tab, outcome.value)
-        else issues.push({ sheet: tab, kind: 'missing-current-month', detail: `current-month tab "${tab}" not found in spreadsheet` })
+  for (const tab of tabs) {
+    const cached = await resolveCachedGrids(tab, currentTab, now)
+    if (cached) gridsByTab.set(tab, cached)
+    else toFetch.push(tab)
+  }
+
+  for (let i = 0; i < toFetch.length; i += BATCH_TABS) {
+    const batch = toFetch.slice(i, i + BATCH_TABS)
+    // AuthExpiredError propagates straight out of fetchManyMonthGrids —
+    // never swallow it, the UI needs it to re-run the OAuth flow.
+    const { grids, failures } = await client.fetchManyMonthGrids(batch)
+    for (const [tab, grids_] of grids) {
+      gridsByTab.set(tab, grids_)
+      await putCached(tab, grids_)
+    }
+    for (const [tab, err] of failures) {
+      if (tab === currentTab && err instanceof TabNotFoundError) {
+        issues.push({ sheet: tab, kind: 'missing-current-month', detail: `current-month tab "${tab}" not found in spreadsheet` })
       } else {
-        const err = outcome.reason
-        if (err instanceof AuthExpiredError) throw err // UI handles re-auth — never swallow
-        const detail = err instanceof Error ? err.message : String(err)
-        issues.push({ sheet: tab, kind: 'fetch-failed', detail })
+        issues.push({ sheet: tab, kind: 'fetch-failed', detail: err.message })
       }
     }
   }
