@@ -1,4 +1,4 @@
-import type { Era, Period } from '../types'
+import type { Era, MonthData, Period } from '../types'
 const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
 
 export function tabToPeriod(tab: string): Period | null {
@@ -19,3 +19,13 @@ export function eraOf(p: Period): Era {
 }
 export const currentTabName = (now: Date) =>
   `${MONTHS[now.getMonth()]}_${String(now.getFullYear() % 100).padStart(2, '0')}`
+
+/** The month shown as "current" throughout the UI (Overview, the cached-data
+ * banner): the current-month tab if it loaded, else the latest month
+ * present. Shared so every consumer agrees on the same tab — a banner or
+ * Overview computing this independently would drift the moment one of them
+ * changed the fallback rule. */
+export function pickDisplayedMonth(months: MonthData[], now: Date): MonthData | undefined {
+  const currentTab = currentTabName(now)
+  return months.find((m) => m.tab === currentTab) ?? months.at(-1)
+}

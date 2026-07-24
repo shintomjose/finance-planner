@@ -41,6 +41,11 @@ let scriptPromise: Promise<void> | null = null
 let tokenClient: TokenClient | null = null
 let currentToken: string | null = null
 let expiresAt = 0
+/** Resolvers for in-flight silentReauth() calls — handleToken settles every
+ * pending one (success or failure) whenever the fixed GIS callback fires,
+ * since the token client's callback is set once at initTokenClient() time
+ * and can't be overridden per requestAccessToken() call. */
+let pendingSilentResolvers: Array<(token: string | null) => void> = []
 
 /** Injects the GIS script exactly once, resolving once it has loaded. */
 function loadGisScript(): Promise<void> {
@@ -63,10 +68,16 @@ function loadGisScript(): Promise<void> {
 }
 
 function handleToken(resp: TokenResponse, onToken: (t: string) => void): void {
-  if (resp.error || !resp.access_token) return
+  const resolvers = pendingSilentResolvers
+  pendingSilentResolvers = []
+  if (resp.error || !resp.access_token) {
+    resolvers.forEach((resolve) => resolve(null))
+    return
+  }
   currentToken = resp.access_token
   expiresAt = Date.now() + resp.expires_in * 1000
   onToken(currentToken)
+  resolvers.forEach((resolve) => resolve(currentToken))
 }
 
 /** Current access token, or null if absent/expired (with a 60s safety
@@ -95,6 +106,35 @@ export function initAuth(onToken: (t: string) => void): void {
     .catch((err: unknown) => {
       console.error('[gis] initAuth failed:', err)
     })
+}
+
+/** One silent re-auth attempt (`prompt: ''`) for recovering from a token
+ * that expired mid-session (AuthExpiredError from a Sheets API call) without
+ * bouncing the user to the sign-in screen. Resolves the new token on
+ * success, or null if the silent flow didn't produce one (e.g. GIS revoked
+ * consent, or no response within `timeoutMs`) — callers should treat null
+ * as "fall back to interactive sign-in", never retry silently again for
+ * that same load cycle. Never rejects. */
+export function silentReauth(timeoutMs = 5000): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!tokenClient) {
+      resolve(null)
+      return
+    }
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve(null)
+    }, timeoutMs)
+    pendingSilentResolvers.push((token) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(token)
+    })
+    tokenClient.requestAccessToken({ prompt: '' })
+  })
 }
 
 /** Interactive sign-in — call from a user gesture (e.g. a "Connect" button)
