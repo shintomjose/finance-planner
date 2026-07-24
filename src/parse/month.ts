@@ -205,8 +205,21 @@ function parseBanksBlock(tab: string, values: (string | number | null)[][], issu
     if (isBlank(labelRaw)) continue
     const name = String(labelRaw).trim()
     const amountRef = `J${row}`
-    const { amountEUR } = readAmount(cell(values, amountRef), tab, amountRef, issues)
-    if (amountEUR !== null) banks.push({ name, amountEUR })
+    const amountRaw = cell(values, amountRef)
+    const { amountEUR } = readAmount(amountRaw, tab, amountRef, issues)
+    if (amountEUR !== null) {
+      banks.push({ name, amountEUR })
+    } else if (isBlank(amountRaw)) {
+      // BankAccount.amountEUR is non-nullable, so a blank amount can't be
+      // kept — but dropping the row must never be silent. #REF!/bad-number
+      // cases already got a 'ref-error'/'bad-number' issue from readAmount
+      // above, so only the plain-blank case needs its own issue here.
+      issues.push({
+        sheet: tab, cell: amountRef, kind: 'dropped-row',
+        detail: `bank account "${name}" at ${amountRef} has a blank amount — dropped from banks[]`,
+        raw: amountRaw,
+      })
+    }
   }
 
   const bankTotalRef = `J${totalRow}`
@@ -214,6 +227,9 @@ function parseBanksBlock(tab: string, values: (string | number | null)[][], issu
 
   let expectedActual: number | null = null
   let balanceAfterFuture: number | null = null
+  // Scans every remaining row to BANK_LAST_ROW rather than stopping once both
+  // labels are found; a later row with the same label prefix would silently
+  // overwrite the earlier match — accepted, not observed in any fixture.
   for (let row = totalRow + 1; row <= BANK_LAST_ROW; row++) {
     const labelRaw = cell(values, `I${row}`)
     if (isBlank(labelRaw)) continue

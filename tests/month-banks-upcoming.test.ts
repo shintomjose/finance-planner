@@ -65,3 +65,11 @@ it('a #REF! bank-account amount (within read rows) produces a ref-error issue, n
   expect(m.issues.some(i => i.kind === 'ref-error' && i.cell === 'J2')).toBe(true)
   expect(m.banks.find(b => b.name === 'Sparkasse')).toBeUndefined()
 })
+
+it('a blank bank-account amount is dropped from banks[] but surfaced as a dropped-row issue', () => {
+  const broken = JSON.parse(JSON.stringify(AUG)) as any
+  broken.values[3][9] = null // J4, N26's amount — blank, inside the read range
+  const m = parseMonth('AUG', broken)
+  expect(m.banks.find(b => b.name === 'N26')).toBeUndefined()
+  expect(m.issues.some(i => i.kind === 'dropped-row' && i.cell === 'J4')).toBe(true)
+})
