@@ -53,10 +53,17 @@ const isBlank = (v: string | number | null): v is null | '' => v === null || v =
 /** Sheets error strings all start with '#' (#REF!, #N/A, #DIV/0!, ...). */
 const isErrorString = (v: unknown): v is string => typeof v === 'string' && v.startsWith('#')
 
-/** Text-concat subtotal footer cells (workbook-map.md §3): a string containing
- * "Total" where a number was expected — e.g. `… & " Total €: " & TEXT(SUM(...),"0.00")`.
- * Ignored silently per parser rules, never routed to ParserIssue. */
-const isTotalFooterString = (v: unknown): v is string => typeof v === 'string' && /total/i.test(v)
+/** Text-concat subtotal footer cells (workbook-map.md §3): a string of the
+ * documented concat shape — `… & " Total €: " & TEXT(SUM(...),"0.00")` —
+ * i.e. contains "Total" AND a digit somewhere (the rendered SUM). Ignored
+ * silently per parser rules, never routed to ParserIssue. A string that
+ * merely mentions "total" with no accompanying number (e.g. a stray label
+ * or comment) does NOT match this shape and falls through to the normal
+ * 'bad-number' path instead — reviewer finding: a bare /total/i substring
+ * test silently discarded ANY string containing that word, which is too
+ * broad and risks swallowing real bad data on the live sheet. */
+const isTotalFooterString = (v: unknown): v is string =>
+  typeof v === 'string' && /total/i.test(v) && /\d/.test(v)
 
 /**
  * Reads a cell expected to hold a plain number. Blank → null quietly.
@@ -75,27 +82,58 @@ function readNumber(values: (string | number | null)[][], ref: string, issues: P
   return null
 }
 
-interface Anchor { value: number | null; present: boolean }
+// `blank` distinguishes a truly-empty anchor cell from every other
+// non-present case (footer-skip) — resolveLogRow needs that distinction to
+// implement the "date present, amount not yet entered" planned-row rule
+// below without also reviving footer/subtotal rows.
+interface Anchor { value: number | null; present: boolean; blank: boolean }
 
 /**
  * Reads a log block's "anchor" amount cell — the cell whose presence decides
- * whether a row is real data. Blank → not a row (present: false, no issue).
- * A text-concat subtotal footer string → also not a row (present: false, no
- * issue — ignored per parser rules, never flagged). '#REF!'/other bad string →
- * IS a row (present: true) but with a null value and a recorded issue, same
- * as every other unparseable-but-present cell in this parser.
+ * whether a row is real data. Blank → not a row (present: false, blank: true,
+ * no issue). A text-concat subtotal footer string → also not a row (present:
+ * false, blank: false, no issue — ignored per parser rules, never flagged).
+ * '#REF!'/other bad string → IS a row (present: true) but with a null value
+ * and a recorded issue, same as every other unparseable-but-present cell in
+ * this parser.
  */
 function readAnchor(values: (string | number | null)[][], ref: string, issues: ParserIssue[]): Anchor {
   const raw = cell(values, ref)
-  if (isBlank(raw)) return { value: null, present: false }
-  if (typeof raw === 'number') return { value: raw, present: true }
-  if (isTotalFooterString(raw)) return { value: null, present: false }
+  if (isBlank(raw)) return { value: null, present: false, blank: true }
+  if (typeof raw === 'number') return { value: raw, present: true, blank: false }
+  if (isTotalFooterString(raw)) return { value: null, present: false, blank: false }
   if (isErrorString(raw)) {
     issues.push({ sheet: SHEET, cell: ref, kind: 'ref-error', detail: `error value "${raw}" at ${ref}`, raw })
-    return { value: null, present: true }
+    return { value: null, present: true, blank: false }
   }
   issues.push({ sheet: SHEET, cell: ref, kind: 'bad-number', detail: `non-numeric value "${raw}" at ${ref}`, raw })
-  return { value: null, present: true }
+  return { value: null, present: true, blank: false }
+}
+
+interface LogRow { include: boolean; date: string | null; amount: number | null }
+
+/**
+ * Resolves one log-block row from its date cell + anchor (amount) cell.
+ * Three outcomes:
+ *  - anchor has a value, or is a bad/error cell (present) → include, with
+ *    whatever amount/issue readAnchor already produced.
+ *  - anchor is genuinely blank BUT the date cell is non-blank → include
+ *    anyway, amount: null, NO issue — locked decision: this is a
+ *    planned/not-yet-entered log line (same "blank = planned" semantics as
+ *    a blank month-ledger expense amount), not an error.
+ *  - both blank, or anchor was a footer/subtotal string → not a row at all.
+ */
+function resolveLogRow(
+  values: (string | number | null)[][], issues: ParserIssue[], dateRef: string, amountRef: string
+): LogRow {
+  const anchor = readAnchor(values, amountRef, issues)
+  if (anchor.present) {
+    return { include: true, date: readDate(values, dateRef, issues), amount: anchor.value }
+  }
+  if (anchor.blank && !isBlank(cell(values, dateRef))) {
+    return { include: true, date: readDate(values, dateRef, issues), amount: null }
+  }
+  return { include: false, date: null, amount: null }
 }
 
 // Sheets/Excel serial date epoch: serial 25569 == 1970-01-01 (UNFORMATTED_VALUE
@@ -262,71 +300,71 @@ function parseSbiBlock(values: (string | number | null)[][], issues: ParserIssue
   return out
 }
 
-/** Badminton gear (EUR) block (F30:G64): F date, G amount, rows 31-40. */
+/** Badminton gear (EUR) block, full bounding box F30:G64: F date, G amount,
+ * data rows 31-64 (row 30 is the header). */
 function parseGearEURBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 31; row <= 40; row++) {
-    const anchor = readAnchor(values, `G${row}`, issues)
-    if (!anchor.present) continue
-    const date = readDate(values, `F${row}`, issues)
-    out.push({ log: 'gear', date, fields: { amountEUR: anchor.value } })
+  for (let row = 31; row <= 64; row++) {
+    const r = resolveLogRow(values, issues, `F${row}`, `G${row}`)
+    if (!r.include) continue
+    out.push({ log: 'gear', date: r.date, fields: { amountEUR: r.amount } })
   }
   return out
 }
 
-/** Badminton gear (INR) block (L50:N62): L date, M item, N amount, rows 51-60. */
+/** Badminton gear (INR) block, full bounding box L50:N62: L date, M item,
+ * N amount, data rows 51-62 (row 50 is the header). */
 function parseGearINRBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 51; row <= 60; row++) {
-    const anchor = readAnchor(values, `N${row}`, issues)
-    if (!anchor.present) continue
-    const date = readDate(values, `L${row}`, issues)
+  for (let row = 51; row <= 62; row++) {
+    const r = resolveLogRow(values, issues, `L${row}`, `N${row}`)
+    if (!r.include) continue
     const itemRaw = cell(values, `M${row}`)
     const item = isBlank(itemRaw) ? null : String(itemRaw).trim()
-    out.push({ log: 'gear', date, fields: { amountINR: anchor.value, item } })
+    out.push({ log: 'gear', date: r.date, fields: { amountINR: r.amount, item } })
   }
   return out
 }
 
-/** Gym log block (H48:J74): H date, I amount, rows 49-58. */
+/** Gym log block, full bounding box H48:J74: H date, I amount, data rows
+ * 49-74 (row 48 is the header). */
 function parseGymBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 49; row <= 58; row++) {
-    const anchor = readAnchor(values, `I${row}`, issues)
-    if (!anchor.present) continue
-    const date = readDate(values, `H${row}`, issues)
-    out.push({ log: 'gym', date, fields: { amountEUR: anchor.value } })
+  for (let row = 49; row <= 74; row++) {
+    const r = resolveLogRow(values, issues, `H${row}`, `I${row}`)
+    if (!r.include) continue
+    out.push({ log: 'gym', date: r.date, fields: { amountEUR: r.amount } })
   }
   return out
 }
 
-/** Petrol log block (F81:K153): F date, G litres, H amount (anchor), I per-litre,
- * J km (often blank), rows 82-90. */
+/** Petrol log block, full bounding box F81:K153: F date, G litres, H amount
+ * (anchor), I per-litre, J km (often blank), data rows 82-152 (row 81 is the
+ * header). */
 function parsePetrolBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 82; row <= 90; row++) {
-    const anchor = readAnchor(values, `H${row}`, issues)
-    if (!anchor.present) continue
-    const date = readDate(values, `F${row}`, issues)
+  for (let row = 82; row <= 152; row++) {
+    const r = resolveLogRow(values, issues, `F${row}`, `H${row}`)
+    if (!r.include) continue
     const litres = readNumber(values, `G${row}`, issues)
     const perLitre = readNumber(values, `I${row}`, issues)
     const km = readNumber(values, `J${row}`, issues)
-    out.push({ log: 'petrol', date, fields: { litres, amountEUR: anchor.value, perLitre, km } })
+    out.push({ log: 'petrol', date: r.date, fields: { litres, amountEUR: r.amount, perLitre, km } })
   }
   return out
 }
 
-/** Alcohol log block (A126:C161): A pre-numbered scaffold running number
- * (present on every templated row — not data on its own), B date, C amount
- * (anchor). A row only counts once C holds a real value beyond the running
- * number — scaffold-only rows (blank B/C) are skipped silently. */
+/** Alcohol log block (A126:C161, already the full bounding box): A
+ * pre-numbered scaffold running number (present on every templated row —
+ * not data on its own), B date, C amount (anchor). A row only counts once C
+ * holds a real value, OR B holds a date with C still blank (planned/not-yet
+ * logged) — pure scaffold-only rows (blank B/C) are skipped silently. */
 function parseAlcoholBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
   for (let row = 126; row <= 161; row++) {
-    const anchor = readAnchor(values, `C${row}`, issues)
-    if (!anchor.present) continue
-    const date = readDate(values, `B${row}`, issues)
-    out.push({ log: 'alcohol', date, fields: { amountEUR: anchor.value } })
+    const r = resolveLogRow(values, issues, `B${row}`, `C${row}`)
+    if (!r.include) continue
+    out.push({ log: 'alcohol', date: r.date, fields: { amountEUR: r.amount } })
   }
   return out
 }

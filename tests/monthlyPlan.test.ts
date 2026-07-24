@@ -67,32 +67,71 @@ describe('SBI Life schedule (A29:D63)', () => {
 })
 
 describe('badminton gear logs (F30:G64 EUR + L50:N62 INR)', () => {
-  it('parses 10 EUR entries with DD.MM.YYYY dates', () => {
+  it('parses 12 EUR entries — full F30:G64 box, not just the old 31-40 window', () => {
     const eur = result.logs.filter((l) => l.log === 'gear' && 'amountEUR' in l.fields)
-    expect(eur).toHaveLength(10)
+    expect(eur).toHaveLength(12)
     expect(eur[0]).toEqual({ log: 'gear', date: '2026-03-05', fields: { amountEUR: 15.99 } })
   })
 
-  it('parses 10 INR entries with serial-number dates converted to ISO', () => {
+  it('row 60 (beyond the old 31-40 loop, inside F30:G64) is picked up by the widened loop', () => {
+    const eur = result.logs.filter((l) => l.log === 'gear' && 'amountEUR' in l.fields)
+    expect(eur.find((e) => e.date === '2026-10-15')).toEqual({ log: 'gear', date: '2026-10-15', fields: { amountEUR: 99 } })
+  })
+
+  it('row 62: date present (F62), amount blank (G62) -> planned entry, amountEUR: null, NO issue', () => {
+    const eur = result.logs.filter((l) => l.log === 'gear' && 'amountEUR' in l.fields)
+    expect(eur.find((e) => e.date === '2026-11-22')).toEqual({ log: 'gear', date: '2026-11-22', fields: { amountEUR: null } })
+    expect(result.issues.find((i) => i.cell === 'G62')).toBeUndefined()
+  })
+
+  it('parses 11 INR entries — full L50:N62 box, not just the old 51-60 window', () => {
     const inr = result.logs.filter((l) => l.log === 'gear' && 'amountINR' in l.fields)
-    expect(inr).toHaveLength(10)
+    expect(inr).toHaveLength(11)
     expect(inr[0]).toEqual({ log: 'gear', date: '2026-02-10', fields: { amountINR: 800, item: 'Shuttlecocks' } })
+  })
+
+  it('row 61 (beyond the old 51-60 loop, inside L50:N62) is picked up by the widened loop', () => {
+    const inr = result.logs.filter((l) => l.log === 'gear' && 'amountINR' in l.fields)
+    expect(inr.find((e) => e.fields.item === 'Net')).toEqual({ log: 'gear', date: '2026-10-05', fields: { amountINR: 2400, item: 'Net' } })
   })
 })
 
 describe('gym log (H48:J74)', () => {
-  it('parses 10 date/amount rows', () => {
+  it('parses 12 date/amount rows — full H48:J74 box, not just the old 49-58 window', () => {
     const gym = result.logs.filter((l) => l.log === 'gym')
-    expect(gym).toHaveLength(10)
+    expect(gym).toHaveLength(12)
     expect(gym[0]).toEqual({ log: 'gym', date: '2026-01-02', fields: { amountEUR: 15 } })
+  })
+
+  it('row 70 (beyond the old 49-58 loop, inside H48:J74) is picked up by the widened loop', () => {
+    const gym = result.logs.filter((l) => l.log === 'gym')
+    expect(gym.find((g) => g.date === '2026-06-26')).toEqual({ log: 'gym', date: '2026-06-26', fields: { amountEUR: 15.75 } })
+  })
+
+  it('planted "Monthly total review" at I72 (contains "total", no digit) -> NOT a silent footer-skip, records bad-number, row kept', () => {
+    const gym = result.logs.filter((l) => l.log === 'gym')
+    expect(gym.find((g) => g.date === null)).toEqual({ log: 'gym', date: null, fields: { amountEUR: null } })
+    expect(result.issues).toContainEqual({
+      sheet: 'MONTHLY_PLAN', cell: 'I72', kind: 'bad-number',
+      detail: expect.stringContaining('Monthly total review'), raw: 'Monthly total review',
+    })
   })
 })
 
 describe('petrol log (F81:K153)', () => {
   const petrol = result.logs.filter((l) => l.log === 'petrol')
 
-  it('parses 8 real fills (one footer row excluded)', () => {
-    expect(petrol).toHaveLength(8)
+  it('parses 10 real fills — full F81:K153 box (one footer row excluded)', () => {
+    expect(petrol).toHaveLength(10)
+  })
+
+  it('rows 120 and 145 (beyond the old 82-90 loop, inside F81:K153) are picked up by the widened loop', () => {
+    expect(petrol.find((p) => p.date === '2026-06-18')).toEqual({
+      log: 'petrol', date: '2026-06-18',
+      fields: { litres: 41.2, amountEUR: 72.1, perLitre: 1.75, km: 17200 },
+    })
+    const p145 = petrol.find((p) => p.date === '2026-07-30')
+    expect(p145?.fields.km).toBeNull()
   })
 
   it('captures litres, amountEUR, perLitre, km fields; blank km stays null quietly', () => {
@@ -148,8 +187,8 @@ describe('alcohol log (A126:C161)', () => {
 })
 
 describe('overall issue set', () => {
-  it('contains exactly the 3 planted issue-worthy cells (ref-error, bad-date) — no stray drops', () => {
+  it('contains exactly the 3 planted issue-worthy cells (ref-error, bad-date, bad-number) — no stray drops', () => {
     const kinds = result.issues.map((i) => `${i.kind}@${i.cell}`).sort()
-    expect(kinds).toEqual(['bad-date@F84', 'ref-error@L4'])
+    expect(kinds).toEqual(['bad-date@F84', 'bad-number@I72', 'ref-error@L4'])
   })
 })
