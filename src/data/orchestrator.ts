@@ -63,8 +63,21 @@ export async function loadMonths(client: SheetsClient, now: Date): Promise<LoadR
     // never swallow it, the UI needs it to re-run the OAuth flow.
     const { grids, failures } = await client.fetchManyMonthGrids(batch)
     for (const [tab, grids_] of grids) {
+      // Cache writes are best-effort and kept separate from the fetch
+      // outcome: a full IndexedDB (or private-browsing block) must not be
+      // reported as a 'fetch-failed' (which would drop the tab from
+      // `months`) — the freshly fetched grid is already in hand and gets
+      // parsed below regardless of whether the write-back succeeds.
       gridsByTab.set(tab, grids_)
-      await putCached(tab, grids_)
+      try {
+        await putCached(tab, grids_)
+      } catch (err) {
+        issues.push({
+          sheet: tab,
+          kind: 'cache-error',
+          detail: `failed to write cache: ${err instanceof Error ? err.message : String(err)}`,
+        })
+      }
     }
     for (const [tab, err] of failures) {
       if (tab === currentTab && err instanceof TabNotFoundError) {

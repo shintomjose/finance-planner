@@ -103,6 +103,16 @@ header h1 {
   text-align: center;
 }
 
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: var(--banner-bg);
+  color: var(--banner-fg);
+  font-size: 0.75rem;
+}
+
 .banner {
   background: var(--banner-bg);
   color: var(--banner-fg);

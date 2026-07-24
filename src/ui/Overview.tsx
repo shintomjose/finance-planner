@@ -2,7 +2,7 @@
 // Falls back to the latest available month when the current-month tab is
 // missing from the spreadsheet (orchestrator already records that as a
 // 'missing-current-month' issue — this just needs to render something sane).
-import { currentTabName } from '../lib/period'
+import { currentTabName, pickDisplayedMonth } from '../lib/period'
 import type { MonthData } from '../types'
 
 const fmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
@@ -22,7 +22,7 @@ function Card({ label, v }: { label: string; v: number | null | undefined }) {
 
 export function Overview({ months, now }: { months: MonthData[]; now: Date }) {
   const currentTab = currentTabName(now)
-  const cur = months.find((m) => m.tab === currentTab) ?? months.at(-1)
+  const cur = pickDisplayedMonth(months, now)
   if (!cur) return <p>No data.</p>
 
   const income = cur.income.reduce((s, t) => s + (t.amountEUR ?? 0), 0)
