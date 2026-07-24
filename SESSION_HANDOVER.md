@@ -33,8 +33,13 @@ Reference workbook: `C:\Users\shintappan\Desktop\PROJECTS\chavara-badminton\docs
 - [x] Implementation Plan 1 (foundation) written:
       `docs/superpowers/plans/2026-07-24-plan1-foundation.md`. Plan 2 (special
       sheets + full UI) deliberately deferred until Plan 1 executes.
-- [ ] Execute Plan 1 (awaiting user: execution mode + blanket commit approval).
-- [ ] Plan 2 + build remaining modules (spec §5).
+- [x] Plan 1 EXECUTED (2026-07-24, subagent-driven): 16 commits, 66/66 tests,
+      all task reviews + final whole-branch review clean. Merged to main, pushed.
+- [ ] User: GCP setup (README "Setup"), fill src/config.ts, repo → public,
+      Pages source → GitHub Actions, first deploy + real-sheet run.
+- [ ] Plan 2: special-sheet parsers + full UI modules (spec §5). Backlog from
+      reviews in .superpowers/sdd/progress.md (union ParserIssue.kind, silent
+      re-auth, cachedBanner precision, CI concurrency, tests typecheck, etc.).
 - Repo is empty: no initial commit, no branch yet. Nothing committed — user
   rule: NEVER commit without explicit approval.
 
