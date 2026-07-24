@@ -73,3 +73,38 @@ it('a blank bank-account amount is dropped from banks[] but surfaced as a droppe
   expect(m.banks.find(b => b.name === 'N26')).toBeUndefined()
   expect(m.issues.some(i => i.kind === 'dropped-row' && i.cell === 'J4')).toBe(true)
 })
+
+// --- Finding 1: 2019v2 upcoming block is OPTIONAL (real sheet: JUL/AUG 2019 ---
+// have no upcoming "Total" in column M — it only appears from later 2019v2
+// months). JUN stays banks-only (unaffected — upcomingExpectedFor already
+// excludes it). JUL/AUG must not report marker-not-found for upcoming.
+
+it('2019v2 JUL-like tab with no upcoming block at all → upcoming [], no marker-not-found issue', () => {
+  // Clone AUG (2019v2 shape) but strip the upcoming block (M2:O6) and rename
+  // to JUL — bare 'JUL' resolves to year 2019, month 7, era 2019v2 (period.ts).
+  const noUpcoming = JSON.parse(JSON.stringify(AUG)) as any
+  for (let row = 1; row <= 5; row++) { // rows 2..6 (0-indexed 1..5), cols M(12)-O(14)
+    noUpcoming.values[row][12] = null
+    noUpcoming.values[row][13] = null
+    noUpcoming.values[row][14] = null
+  }
+  const m = parseMonth('JUL', noUpcoming)
+  expect(m.era).toBe('2019v2')
+  expect(m.upcoming).toEqual([])
+  expect(m.issues.some(i => i.kind === 'marker-not-found' && i.detail.includes('upcoming'))).toBe(false)
+})
+
+it('2019v2 AUG (upcoming block present) still parses upcoming normally — with-block path unaffected', () => {
+  const m = parseMonth('AUG', AUG as any)
+  expect(m.upcoming.length).toBe(4)
+  expect(m.issues.some(i => i.kind === 'marker-not-found' && i.detail.includes('upcoming'))).toBe(false)
+})
+
+it('full era (JAN_22): missing upcoming Total marker STILL issues — upcoming stays required', () => {
+  const broken = JSON.parse(JSON.stringify(JAN_22)) as any
+  broken.values[7][12] = 'Totall' // M8, the upcoming Total marker for JAN_22 (see month-summary/banks-upcoming fixtures)
+  const m = parseMonth('JAN_22', broken)
+  expect(m.era).toBe('full')
+  expect(m.upcoming).toEqual([])
+  expect(m.issues.some(i => i.kind === 'marker-not-found' && i.detail.includes('upcoming'))).toBe(true)
+})
