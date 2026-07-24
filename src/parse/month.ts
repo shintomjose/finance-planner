@@ -1,10 +1,10 @@
 // Month-ledger tab parser (workbook-map.md §1). Fills period/era resolution,
-// income[], expenses[], carryover, and issues[] only (Task 5 scope). Other
-// MonthData fields (summary, banks, upcoming, expectedActual,
-// balanceAfterFuture) are left as empty/null placeholders for Tasks 6–7,
-// which should add their own private `parseXBlock` functions alongside
-// `parseIncomeBlock`/`parseExpenseBlock` below and wire them into
-// `parseMonth`.
+// income[], expenses[], carryover, summary, and household tagging (Tasks 5–6).
+// Remaining MonthData fields (banks, upcoming, expectedActual,
+// balanceAfterFuture) are left as empty/null placeholders for Task 7, which
+// should add its own private `parseXBlock` functions alongside
+// `parseIncomeBlock`/`parseExpenseBlock`/`parseSummaryBlock` below and wire
+// them into `parseMonth`.
 import { tabToPeriod, eraOf } from '../lib/period'
 import { normLabel } from '../lib/normalize'
 import type { MonthData, Tx, ParserIssue, Period } from '../types'
@@ -106,6 +106,60 @@ function parseExpenseBlock(tab: string, values: (string | number | null)[][], is
   return expenses
 }
 
+/** Household cell (workbook-map.md §1.2) by era: v2025 tabs moved Household
+ * up to F4/G4 (5-row summary); all earlier eras keep it at F6/G6. */
+function householdCellFor(era: MonthData['era']): string {
+  return era === 'v2025' ? 'G4' : 'G6'
+}
+
+/**
+ * Reads a summary cell (G1/G2/G3/household) as a number. Blank is *not*
+ * expected here (unlike Tx amounts) — any non-number (including blank)
+ * records a 'bad-number' issue and resolves to null.
+ */
+function readSummaryNumber(
+  values: (string | number | null)[][], ref: string, tab: string, issues: ParserIssue[]
+): number | null {
+  const raw = cell(values, ref)
+  if (typeof raw === 'number') return raw
+  issues.push({ sheet: tab, cell: ref, kind: 'bad-number', detail: `non-numeric summary value "${String(raw)}" at ${ref}`, raw })
+  return null
+}
+
+interface SummaryResult { summary: MonthData['summary']; householdRows: number[] }
+
+/** Summary block: G1 totalIncome, G2 totalExpense, G3 balance, household cell
+ * by era (workbook-map.md §1.2). G5 "Monthly AVG" in v2025 tabs is a stale
+ * frozen formula and must never be read here. The household formula (e.g.
+ * "=D3+D5") is parsed for its D-row references, which get tagged onto the
+ * matching expense Tx rows below. Missing household formula (where the era
+ * expects one) → 'missing-formula' issue, no tagging, household summary null. */
+function parseSummaryBlock(
+  tab: string, era: MonthData['era'], grids: MonthGrids, issues: ParserIssue[]
+): SummaryResult {
+  const { values, formulas } = grids
+  const totalIncome = readSummaryNumber(values, 'G1', tab, issues)
+  const totalExpense = readSummaryNumber(values, 'G2', tab, issues)
+  const balance = readSummaryNumber(values, 'G3', tab, issues)
+
+  const householdRef = householdCellFor(era)
+  const household = readSummaryNumber(values, householdRef, tab, issues)
+
+  const householdRows: number[] = []
+  const formula = formulas[householdRef]
+  if (!formula) {
+    issues.push({
+      sheet: tab, cell: householdRef, kind: 'missing-formula',
+      detail: `no household formula found at ${householdRef} for era "${era}"`,
+    })
+  } else {
+    const rowMatches = formula.matchAll(/D(\d+)/g)
+    for (const m of rowMatches) householdRows.push(Number(m[1]))
+  }
+
+  return { summary: { totalIncome, totalExpense, balance, household }, householdRows }
+}
+
 /** MonthData for tabs that fail period resolution, or as the pre-fill base. */
 function emptyMonthData(tab: string, period: Period, era: MonthData['era'], issues: ParserIssue[]): MonthData {
   return {
@@ -136,6 +190,11 @@ export function parseMonth(tab: string, grids: MonthGrids): MonthData {
   const { values } = grids
   const { income, carryover } = parseIncomeBlock(tab, values, issues)
   const expenses = parseExpenseBlock(tab, values, issues)
+  const { summary, householdRows } = parseSummaryBlock(tab, era, grids, issues)
+  const householdRowSet = new Set(householdRows)
+  for (const tx of expenses) {
+    if (householdRowSet.has(tx.row)) tx.household = true
+  }
   const base = emptyMonthData(tab, period, era, issues)
-  return { ...base, income, expenses, carryover }
+  return { ...base, income, expenses, carryover, summary }
 }
