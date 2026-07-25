@@ -171,17 +171,17 @@ describe('buildNetWorth — per-source aggregation', () => {
   })
 })
 
-describe('project — compound-annually projection', () => {
-  it('matches a hand-computed 3-year case: v = (v + contribution) * (1 + rate/100)', () => {
-    // year1: (1000 + 100) * 1.1 = 1210
-    // year2: (1210 + 100) * 1.1 = 1441
-    // year3: (1441 + 100) * 1.1 = 1695.1
-    const points = project(1000, 10, 100, 3)
-    expect(points).toEqual([
-      { year: 1, valueEUR: 1210 },
-      { year: 2, valueEUR: 1441 },
-      { year: 3, valueEUR: 1695.1 },
-    ])
+describe('project — ordinary-annuity compounding (grow, then contribute)', () => {
+  it('reproduces MONTHLY_PLAN\'s own K11:R26 fixture sequence: rate 7.5%, yearly contribution 6000, starting 21000', () => {
+    // Sheet's first three steps: 21000 -> 28575 -> 36718 -> 45472 (+-1 rounding).
+    // v = v * (1 + rate/100) + contribution:
+    //   21000 * 1.075 + 6000 = 28575
+    //   28575 * 1.075 + 6000 = 36718.125 ~= 36718
+    //   36718.125 * 1.075 + 6000 = 45471.984375 ~= 45472
+    const points = project(21000, 7.5, 6000, 3)
+    expect(points[0].valueEUR).toBe(28575)
+    expect(Math.round(points[1].valueEUR)).toBe(36718)
+    expect(Math.round(points[2].valueEUR)).toBe(45472)
   })
 
   it('returns an empty array for zero years', () => {

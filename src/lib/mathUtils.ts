@@ -8,6 +8,7 @@
 import type { MonthData, Tx } from '../types'
 
 export const round2 = (n: number): number => Math.round(n * 100) / 100
+export const round1 = (n: number): number => Math.round(n * 10) / 10
 
 export function sortByPeriod(months: MonthData[]): MonthData[] {
   return [...months].sort((a, b) => a.period.year - b.period.year || a.period.month - b.period.month)
