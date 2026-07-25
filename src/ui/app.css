@@ -972,3 +972,70 @@ tr[data-drift='true'] td {
   padding: var(--space-2) var(--space-3);
   width: 8rem;
 }
+
+/* ---------------------------------------------------------------------
+   Trips screen (screens/Trips.tsx) — per-trip cards + expandable ledgers
+   --------------------------------------------------------------------- */
+
+.trip-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.trip-card {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: var(--surface);
+}
+
+.trip-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.trip-card-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--ink);
+  margin: 0;
+}
+
+.trip-card-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.trip-card-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.trip-card-figure-label {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.trip-card-ledger {
+  margin-top: var(--space-3);
+}
+
+.trip-card-ledger summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  padding: var(--space-2) 0;
+}
+
+.trip-card-ledger .table-wrap {
+  margin-top: var(--space-2);
+}
