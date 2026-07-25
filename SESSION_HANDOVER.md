@@ -39,9 +39,14 @@ Reference workbook: `C:\Users\shintappan\Desktop\PROJECTS\chavara-badminton\docs
       locally (2026-07-24). Post-plan hotfixes: fetch binding (Illegal
       invocation), 403 error-body surfacing, cross-tab batchGet (182→14 reqs).
 - [ ] User: repo → public + Pages source → GitHub Actions → live URL.
-- [ ] Plan 2: special-sheet parsers + full UI modules (spec §5). Backlog from
-      reviews in .superpowers/sdd/progress.md (union ParserIssue.kind, silent
-      re-auth, cachedBanner precision, CI concurrency, tests typecheck, etc.).
+- [x] Plan 2 EXECUTED (2026-07-26): 14 tasks + final review, 30 commits,
+      369 tests. All 9 spec-§5 modules live: Budget, Trends, Net worth, Sachin,
+      Trips, Logs, Goals & Recurring (+ category editor, fx editor, export/
+      import), Parser Health v2. All 6 special-sheet parsers. recharts lazy.
+- [ ] User: first live run — walk Parser Health against ledger RE-VERIFY list
+      (budget A2:A5 layout, MF column roles, projection sub-layout);
+      'ambiguous-date' issues = swapped-column self-diagnosis, expected signal.
+- [ ] Post-deploy backlog: see .superpowers/sdd/progress.md P2 FINAL entry.
 - Repo is empty: no initial commit, no branch yet. Nothing committed — user
   rule: NEVER commit without explicit approval.
 
