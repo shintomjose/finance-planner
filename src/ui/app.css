@@ -173,6 +173,7 @@ button {
   font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 600;
+  margin: 0;
 }
 
 .screen {
