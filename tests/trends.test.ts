@@ -193,6 +193,14 @@ describe('topMovers', () => {
     expect(movers.find((mv) => mv.category === 'groceries')).toBeUndefined()
   })
 
+  it('keeps a mover at exactly the 20 EUR minimum delta (boundary: threshold is inclusive)', () => {
+    const m1 = month('JAN_24', 2024, 1, { expenses: [tx('Edeka', 100)] })
+    const m2 = month('FEB_24', 2024, 2, { expenses: [tx('Edeka', 120)] }) // latest, exactly +20
+    const movers = topMovers([m1, m2], {}, 3)
+    const groceries = movers.find((mv) => mv.category === 'groceries')
+    expect(groceries?.deltaEUR).toBe(20)
+  })
+
   it('includes a category that dropped to zero in the latest month (was present in trailing window)', () => {
     const m1 = month('JAN_24', 2024, 1, { expenses: [tx('Edeka', 200)] })
     const m2 = month('FEB_24', 2024, 2, { expenses: [] }) // latest — groceries vanished

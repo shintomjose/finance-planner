@@ -4,23 +4,14 @@
 // a transaction, or the sheet's carryover formula reaches outside the row
 // range our parser reads — this is the signal that surfaces "Parser Health"
 // style drift warnings for months (Plan 2 Task 9+).
-import type { MonthData, Tx } from '../types'
+import type { MonthData } from '../types'
+import { round2, sortByPeriod, sumAmounts } from './mathUtils'
 
 export interface CarryoverDrift {
   tab: string
   computed: number
   sheet: number | null
   driftEUR: number | null
-}
-
-const round2 = (n: number): number => Math.round(n * 100) / 100
-
-function sortByPeriod(months: MonthData[]): MonthData[] {
-  return [...months].sort((a, b) => a.period.year - b.period.year || a.period.month - b.period.month)
-}
-
-function sumAmounts(txs: Tx[]): number {
-  return txs.reduce((sum, t) => sum + (t.amountEUR ?? 0), 0)
 }
 
 export function computeChain(months: MonthData[]): CarryoverDrift[] {
