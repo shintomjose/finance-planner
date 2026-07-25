@@ -592,6 +592,90 @@ tbody tr:nth-child(even) {
   background: var(--surface-2);
 }
 
+.parser-health-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.parser-health-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--ink-secondary);
+}
+
+.parser-health-select {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.parser-health-kind-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.parser-health-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.parser-health-group {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.parser-health-group .table-wrap {
+  border: none;
+  border-radius: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.parser-health-group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.parser-health-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.parser-health-group-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--status-warning-wash);
+  color: var(--status-warning);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+
 /* ---------------------------------------------------------------------
    Chart chrome (charts/*.tsx) — tooltip, legend, donut center, pacing bar
    --------------------------------------------------------------------- */

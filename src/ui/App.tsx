@@ -1,32 +1,28 @@
-// App shell (Task 10). Flow: mount -> initAuth (silent) -> token -> new
-// SheetsClient(getToken) -> loadMonths -> ready. No token -> SignIn screen.
-// AuthExpiredError from loadMonths -> one silent re-auth attempt
-// (src/lib/authRetry.ts) and a single retry of loadMonths; only if THAT
-// still fails on auth -> back to SignIn with a "session expired" note.
-// Fetch failures that still leave cached months (per-tab 'fetch-failed'
-// issues but months.length > 0) -> ready + banner (scoped to the displayed
-// tab only — src/lib/banner.ts) plus a small nav chip for any other tabs
-// that failed. A load that yields zero months (fetch failed for everything,
-// or a genuine hard error) -> error state with retry.
-import { useCallback, useEffect, useState } from 'react'
-import { getToken, initAuth, signIn, silentReauth } from '../api/gis'
-import { AuthExpiredError, SheetsClient } from '../api/sheets'
-import { loadMonths } from '../data/orchestrator'
-import { loadWithSilentReauth } from '../lib/authRetry'
-import { bannerFor } from '../lib/banner'
+// App shell (Task 10, rewired Task 14). Flow: mount -> initAuth (silent) ->
+// token -> new SheetsClient(getToken) -> loadMonths -> loadSpecialTabs ->
+// ready. No token -> SignIn screen. AuthExpiredError from either fetch -> one
+// silent re-auth attempt (src/lib/authRetry.ts) and a single retry of the
+// whole load; only if THAT still fails on auth -> back to SignIn with a
+// "session expired" note. Fetch failures that still leave cached months
+// (per-tab 'fetch-failed' issues but months.length > 0) -> ready + banner
+// (scoped to the displayed tab only — src/lib/banner.ts) plus a small nav
+// chip for any other tabs that failed. A load that yields zero months
+// (fetch failed for everything, or a genuine hard error) -> error state with
+// retry. Special-tab fetch/parse trouble NEVER blocks 'ready' — months alone
+// are enough; a missing special tab just means its screen prop is null and
+// its issues (if any) show up in Parser Health. All of this state-machine
+// logic now lives in the useAppData hook (src/data/useAppData.ts) — this
+// file only owns "which of the 9 screens is active" and rendering the
+// resulting state.
+import { useState } from 'react'
+import { useAppData } from '../data/useAppData'
 import { pickDisplayedMonth } from '../lib/period'
-import type { MonthData, ParserIssue } from '../types'
+import { bannerFor } from '../lib/banner'
 import { Layout, SCREEN_REGISTRY } from './Layout'
 import type { ScreenId } from './Layout'
 import { SignIn } from './SignIn'
 import { LoadingState } from './shared'
 import './app.css'
-
-type AppState =
-  | { kind: 'unauthenticated'; note?: string }
-  | { kind: 'loading' }
-  | { kind: 'ready'; months: MonthData[]; issues: ParserIssue[] }
-  | { kind: 'error'; message: string }
 
 type Tab = ScreenId
 
@@ -36,48 +32,8 @@ type Tab = ScreenId
 const now = new Date()
 
 export default function App() {
-  const [state, setState] = useState<AppState>({ kind: 'unauthenticated' })
   const [tab, setTab] = useState<Tab>('overview')
-  const [hasToken, setHasToken] = useState(false)
-
-  useEffect(() => {
-    initAuth(() => setHasToken(true))
-  }, [])
-
-  const load = useCallback(async () => {
-    setState({ kind: 'loading' })
-    const client = new SheetsClient(getToken)
-    try {
-      const outcome = await loadWithSilentReauth(
-        () => loadMonths(client, now),
-        silentReauth,
-        (err) => err instanceof AuthExpiredError,
-      )
-      if (outcome.status === 'unauthenticated') {
-        setHasToken(false)
-        setState({ kind: 'unauthenticated', note: 'Session expired — please sign in again.' })
-        return
-      }
-      const result = outcome.value
-      if (result.months.length === 0) {
-        const detail = result.issues.map((i) => `${i.sheet}: ${i.detail}`).join('; ')
-        setState({ kind: 'error', message: detail || 'No month data could be loaded.' })
-        return
-      }
-      setState({ kind: 'ready', months: result.months, issues: result.issues })
-    } catch (err) {
-      setState({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
-    }
-  }, [])
-
-  useEffect(() => {
-    if (hasToken) void load()
-  }, [hasToken, load])
-
-  const retry = () => {
-    if (getToken()) void load()
-    else signIn()
-  }
+  const { state, retry, appState, onStateChange } = useAppData(now)
 
   if (state.kind === 'unauthenticated') return <SignIn note={state.note} />
   if (state.kind === 'loading') {
@@ -96,17 +52,18 @@ export default function App() {
     )
   }
 
-  // `state.months` is non-empty here (the load() branch above routes
-  // zero-month results to the 'error' state before ever reaching 'ready'),
-  // so pickDisplayedMonth always returns a month — no fallback needed.
-  const displayedTab = pickDisplayedMonth(state.months, now)!.tab
-  const { bannerForDisplayedTab, otherFailedTabCount } = bannerFor(state.issues, displayedTab)
+  // `state.data.months` is non-empty here (the hook routes zero-month
+  // results to the 'error' state before ever reaching 'ready'), so
+  // pickDisplayedMonth always returns a month — no fallback needed.
+  const { months, issues, plan, mutualFunds, deutscheBank, binance, sachin, trips } = state.data
+  const displayedTab = pickDisplayedMonth(months, now)!.tab
+  const { bannerForDisplayedTab, otherFailedTabCount } = bannerFor(issues, displayedTab)
 
   return (
     <Layout
       active={tab}
       onNavigate={setTab}
-      issueCount={state.issues.length}
+      issueCount={issues.length}
       banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
       chip={
         otherFailedTabCount > 0 ? (
@@ -115,7 +72,20 @@ export default function App() {
           </span>
         ) : undefined
       }
-      screenProps={{ months: state.months, issues: state.issues, now, label: SCREEN_REGISTRY[tab].label }}
+      screenProps={{
+        months,
+        issues,
+        now,
+        label: SCREEN_REGISTRY[tab].label,
+        plan,
+        mutualFunds,
+        deutscheBank,
+        binance,
+        sachin,
+        trips,
+        appState,
+        onStateChange,
+      }}
     />
   )
 }
