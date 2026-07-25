@@ -7,6 +7,7 @@
 // touched by any block function below.
 import type { Budget, InvestmentSnapshot, LogEntry, ParserIssue } from '../types'
 import type { SpecialGrids } from '../data/specialTabs'
+import { cellAt, isBlank, isErrorString, readDateAt, readNumberAt } from './cells'
 
 const SHEET = 'MONTHLY_PLAN'
 
@@ -22,36 +23,11 @@ export interface MonthlyPlanData {
   issues: ParserIssue[]
 }
 
-/** A1 column letters ('A', 'B', ..., 'Z', 'AA', ...) → 0-based index. */
-function colToIndex(col: string): number {
-  let idx = 0
-  for (let i = 0; i < col.length; i++) idx = idx * 26 + (col.charCodeAt(i) - 64)
-  return idx - 1
-}
-
-/** A1-notation cell ref (e.g. 'D19') → 0-based { row, col } grid indices. */
-function parseA1(ref: string): { row: number; col: number } {
-  const m = /^([A-Z]+)(\d+)$/.exec(ref)
-  if (!m) return { row: -1, col: -1 }
-  return { row: Number(m[2]) - 1, col: colToIndex(m[1]) }
-}
-
-/** Reads a single cell by A1 ref from the values grid; missing/OOB → null. */
-function cell(values: (string | number | null)[][], ref: string): string | number | null {
-  const { row, col } = parseA1(ref)
-  if (row < 0 || col < 0) return null
-  const line = values[row]
-  if (!line) return null
-  const v = line[col]
-  return v === undefined ? null : v
-}
-
-// Type predicate (not just boolean) so downstream string-only calls (e.g.
-// parseDelimitedDate) narrow correctly after an `if (isBlank(raw)) return`.
-const isBlank = (v: string | number | null): v is null | '' => v === null || v === ''
-
-/** Sheets error strings all start with '#' (#REF!, #N/A, #DIV/0!, ...). */
-const isErrorString = (v: unknown): v is string => typeof v === 'string' && v.startsWith('#')
+// cell/isBlank/isErrorString and the readNumber/readDate serial+delimited-date
+// machinery now live in cells.ts (shared with mutualFunds.ts, Plan 2 Task 4 —
+// see that file's header comment). `cell` keeps its short local name via an
+// alias since every call site in this file already uses it.
+const cell = cellAt
 
 /** Text-concat subtotal footer cells (workbook-map.md §3): a string of the
  * documented concat shape — `… & " Total €: " & TEXT(SUM(...),"0.00")` —
@@ -65,21 +41,9 @@ const isErrorString = (v: unknown): v is string => typeof v === 'string' && v.st
 const isTotalFooterString = (v: unknown): v is string =>
   typeof v === 'string' && /total/i.test(v) && /\d/.test(v)
 
-/**
- * Reads a cell expected to hold a plain number. Blank → null quietly.
- * '#REF!'/error string → null + 'ref-error'. Any other non-numeric string →
- * null + 'bad-number'.
- */
+/** Thin wrapper binding this file's SHEET constant into cells.ts's shared readNumberAt. */
 function readNumber(values: (string | number | null)[][], ref: string, issues: ParserIssue[]): number | null {
-  const raw = cell(values, ref)
-  if (isBlank(raw)) return null
-  if (typeof raw === 'number') return raw
-  if (isErrorString(raw)) {
-    issues.push({ sheet: SHEET, cell: ref, kind: 'ref-error', detail: `error value "${raw}" at ${ref}`, raw })
-    return null
-  }
-  issues.push({ sheet: SHEET, cell: ref, kind: 'bad-number', detail: `non-numeric value "${raw}" at ${ref}`, raw })
-  return null
+  return readNumberAt(values, ref, SHEET, issues)
 }
 
 // `blank` distinguishes a truly-empty anchor cell from every other
@@ -136,56 +100,9 @@ function resolveLogRow(
   return { include: false, date: null, amount: null }
 }
 
-// Sheets/Excel serial date epoch: serial 25569 == 1970-01-01 (UNFORMATTED_VALUE
-// + SERIAL_NUMBER date rendering, see api/sheets.ts).
-const SHEET_EPOCH_SERIAL = 25569
-const MS_PER_DAY = 86400000
-
-function serialToISODate(serial: number): string | null {
-  const ms = (serial - SHEET_EPOCH_SERIAL) * MS_PER_DAY
-  const d = new Date(ms)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toISOString().slice(0, 10)
-}
-
-// Accepts 'DD-MM-YYYY' and 'DD.MM.YYYY' (workbook-map.md §3 mixed date encodings).
-const DELIMITED_DATE_RE = /^(\d{1,2})[.-](\d{1,2})[.-](\d{4})$/
-
-function parseDelimitedDate(raw: string): string | null {
-  const m = DELIMITED_DATE_RE.exec(raw.trim())
-  if (!m) return null
-  const day = Number(m[1])
-  const month = Number(m[2])
-  const year = Number(m[3])
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${year}-${pad(month)}-${pad(day)}`
-}
-
-/**
- * Reads a cell expected to hold a date. Blank → null quietly. Numeric →
- * serial-date conversion. '#REF!' → null + 'ref-error'. Any other
- * non-blank unparseable value → null + 'bad-date'.
- */
+/** Thin wrapper binding this file's SHEET constant into cells.ts's shared readDateAt. */
 function readDate(values: (string | number | null)[][], ref: string, issues: ParserIssue[]): string | null {
-  const raw = cell(values, ref)
-  if (isBlank(raw)) return null
-  if (typeof raw === 'number') {
-    const iso = serialToISODate(raw)
-    if (iso === null) {
-      issues.push({ sheet: SHEET, cell: ref, kind: 'bad-date', detail: `unparseable serial date ${raw} at ${ref}`, raw })
-    }
-    return iso
-  }
-  if (isErrorString(raw)) {
-    issues.push({ sheet: SHEET, cell: ref, kind: 'ref-error', detail: `error value "${raw}" at ${ref}`, raw })
-    return null
-  }
-  const iso = parseDelimitedDate(raw)
-  if (iso === null) {
-    issues.push({ sheet: SHEET, cell: ref, kind: 'bad-date', detail: `unparseable date "${raw}" at ${ref}`, raw })
-  }
-  return iso
+  return readDateAt(values, ref, SHEET, issues)
 }
 
 /**
