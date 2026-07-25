@@ -67,7 +67,7 @@ export default function App() {
       banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
       chip={
         otherFailedTabCount > 0 ? (
-          <span className="chip" title="Other months failed to refresh — see Parser Health for details">
+          <span className="chip" title="Some data failed to refresh — see Parser Health for details">
             {otherFailedTabCount} tab{otherFailedTabCount === 1 ? '' : 's'} failed to load
           </span>
         ) : undefined

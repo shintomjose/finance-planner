@@ -3,9 +3,12 @@
 // per-source P/L, and an editable 2035-style compounding projection. All
 // the math lives in ../../lib/networth — this component only shapes chart
 // data, tracks the two projection inputs (local state, no persistence),
-// and decides per-source whether to show real figures or an EmptyState
-// ("not connected yet" — Task 14 hasn't wired mutualFunds/deutscheBank/
-// binance into App.tsx yet, so those props are undefined today).
+// and decides per-source whether to show real figures or an EmptyState.
+// Task 14 wired mutualFunds/deutscheBank/binance into App.tsx (via
+// useAppData), so these props are populated whenever their special tab
+// fetched and parsed successfully — the EmptyState path now means "this
+// source's tab failed to fetch/parse" (see Parser Health), not "not
+// connected yet".
 import { useMemo, useState } from 'react'
 import { round1, round2 } from '../../lib/mathUtils'
 import { buildNetWorth, project } from '../../lib/networth'

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { loadState, saveState, exportJSON, importJSON, DEFAULT_STATE, _setStorage } from '../src/state/appState'
+import { loadState, saveState, exportJSON, importJSON, parseFxRateInput, DEFAULT_STATE, _setStorage } from '../src/state/appState'
 import type { AppState } from '../src/state/appState'
 
 function fakeStorage() {
@@ -133,6 +133,35 @@ describe('appState', () => {
     expect(() => {
       DEFAULT_STATE.fxRate = 1
     }).toThrow()
+  })
+
+  // parseFxRateInput: shared validator for the Goals screen's fxRate editor
+  // (Plan 2 pre-deploy fix) — a bad edit (blank, non-numeric, zero, negative)
+  // must never silently commit garbage over a working fxRate, so the editor
+  // needs a clean "valid or not" split it can act on.
+  it('parseFxRateInput accepts a positive finite number string', () => {
+    expect(parseFxRateInput('92.5')).toBe(92.5)
+  })
+
+  it('parseFxRateInput rejects zero', () => {
+    expect(parseFxRateInput('0')).toBeNull()
+  })
+
+  it('parseFxRateInput rejects negative numbers', () => {
+    expect(parseFxRateInput('-5')).toBeNull()
+  })
+
+  it('parseFxRateInput rejects non-numeric text', () => {
+    expect(parseFxRateInput('abc')).toBeNull()
+  })
+
+  it('parseFxRateInput rejects blank input', () => {
+    expect(parseFxRateInput('')).toBeNull()
+    expect(parseFxRateInput('   ')).toBeNull()
+  })
+
+  it('parseFxRateInput rejects non-finite input (Infinity)', () => {
+    expect(parseFxRateInput('Infinity')).toBeNull()
   })
 
   it('loadState/importJSON hand back independently mutable state, never the frozen DEFAULT_STATE reference', () => {

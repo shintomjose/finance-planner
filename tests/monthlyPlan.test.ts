@@ -121,8 +121,15 @@ describe('gym log (H48:J74)', () => {
 describe('petrol log (F81:K153)', () => {
   const petrol = result.logs.filter((l) => l.log === 'petrol')
 
-  it('parses 10 real fills — full F81:K153 box (one footer row excluded)', () => {
-    expect(petrol).toHaveLength(10)
+  it('parses 11 real fills — full F81:K153 box (one footer row excluded)', () => {
+    expect(petrol).toHaveLength(11)
+  })
+
+  it('row 153 (the last row of the full F81:K153 box) is picked up — off-by-one fix, loop used to stop at 152', () => {
+    expect(petrol.find((p) => p.date === '2026-08-13')).toEqual({
+      log: 'petrol', date: '2026-08-13',
+      fields: { litres: 36.4, amountEUR: 63.7, perLitre: 1.75, km: 17550 },
+    })
   })
 
   it('rows 120 and 145 (beyond the old 82-90 loop, inside F81:K153) are picked up by the widened loop', () => {

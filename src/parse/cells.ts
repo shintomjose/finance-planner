@@ -83,9 +83,26 @@ export function parseDelimitedDate(raw: string): string | null {
   return `${year}-${pad(month)}-${pad(day)}`
 }
 
+// Plausibility window for numeric (serial) date cells: the workbook only
+// ever has real dates in this range (account opened well after 2015, planner
+// horizon caps at 2040). A serial outside it is essentially always a swapped
+// column read as a date (e.g. an amount cell) rather than a genuine date —
+// on the live sheet that misread lands ~1905, which is useless (and
+// confusing) as a parsed value. Better to self-report via Parser Health on
+// first live run than to silently emit era-wrong garbage.
+const MIN_PLAUSIBLE_YEAR = 2015
+const MAX_PLAUSIBLE_YEAR = 2040
+
+function isPlausibleDateYear(iso: string): boolean {
+  const year = Number(iso.slice(0, 4))
+  return year >= MIN_PLAUSIBLE_YEAR && year <= MAX_PLAUSIBLE_YEAR
+}
+
 /**
  * Reads a cell expected to hold a date. Blank → null quietly. Numeric →
- * serial-date conversion. '#REF!' → null + 'ref-error'. Any other
+ * serial-date conversion, but only when the resulting year falls in the
+ * plausible window [2015, 2040]; outside it → null + 'ambiguous-date' (see
+ * isPlausibleDateYear doc comment). '#REF!' → null + 'ref-error'. Any other
  * non-blank unparseable value → null + 'bad-date'.
  */
 export function readDateAt(
@@ -97,6 +114,15 @@ export function readDateAt(
     const iso = serialToISODate(raw)
     if (iso === null) {
       issues.push({ sheet, cell: ref, kind: 'bad-date', detail: `unparseable serial date ${raw} at ${ref}`, raw })
+      return null
+    }
+    if (!isPlausibleDateYear(iso)) {
+      issues.push({
+        sheet, cell: ref, kind: 'ambiguous-date',
+        detail: `serial ${raw} at ${ref} converts to implausible date ${iso} (outside ${MIN_PLAUSIBLE_YEAR}-${MAX_PLAUSIBLE_YEAR} window) — likely a misread cell (e.g. an amount in a date column)`,
+        raw,
+      })
+      return null
     }
     return iso
   }

@@ -125,6 +125,19 @@ export function exportJSON(s: AppState): string {
   return JSON.stringify(s, null, 2)
 }
 
+/** Validates a raw string from the Goals screen's fxRate `<input>` (Plan 2
+ * pre-deploy fix): only a positive, finite number is a valid ₹-per-€ rate —
+ * blank, non-numeric, zero, negative, or Infinity all mean "don't touch the
+ * existing rate", so the caller can tell "commit" from "keep previous +
+ * show an inline note" with one check. */
+export function parseFxRateInput(raw: string): number | null {
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n
+}
+
 export function importJSON(text: string): AppState {
   let parsed: unknown
   try {

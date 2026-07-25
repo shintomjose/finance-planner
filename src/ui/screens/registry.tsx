@@ -21,18 +21,24 @@ export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' 
  * `Record<ScreenId, LazyExoticComponent<ComponentType<ScreenProps>>>`
  * regardless of which real component eventually backs a slot.
  *
- * `plan`, `mutualFunds`, `deutscheBank`, `binance`, `sachin`, `trips`, and
- * `appState` are optional because the special-tab/state data wiring
- * (Task 14) doesn't exist yet — App.tsx doesn't pass them at all today, so
- * every consumer (e.g. Budget, NetWorth, Sachin, Trips) must treat them as
- * possibly undefined and fall back sensibly (EmptyState / DEFAULT_STATE).
- * Logs has no dedicated prop — its four log kinds all live on
- * `plan.logs`, so it reads `plan` like Budget/NetWorth do.
+ * `plan`, `mutualFunds`, `deutscheBank`, `binance`, `sachin`, and `trips` are
+ * optional/nullable because Task 14 (App.tsx -> useAppData wiring, see
+ * src/data/useAppData.ts) passes real parsed data for them but each is
+ * genuinely `null` whenever its special tab failed to fetch or parse — a
+ * missing special tab never blocks 'ready', it just means that screen's
+ * prop is null (see App.tsx's top comment). Every consumer (e.g. Budget,
+ * NetWorth, Sachin, Trips) must still treat them as possibly null/undefined
+ * and fall back sensibly (EmptyState / DEFAULT_STATE) — optional here mainly
+ * so callers other than the real App.tsx (tests, future embeds) aren't
+ * forced to supply them. Logs has no dedicated prop — its four log kinds all
+ * live on `plan.logs`, so it reads `plan` like Budget/NetWorth do.
  *
- * `onStateChange` (Task 13): screens don't persist appState edits
- * themselves — the Goals screen mutates a local copy and calls this if the
- * caller passed one. App.tsx doesn't wire it up yet (Task 14 adds
- * saveState + re-render), so it's optional and today always undefined. */
+ * `appState`/`onStateChange` (Task 13, wired Task 14): App.tsx always passes
+ * both today — `appState` from `useAppData`'s `loadState()`, and
+ * `onStateChange` calling `saveState` + re-rendering with the new state. The
+ * Goals screen mutates a local copy and calls `onStateChange` on every edit;
+ * both stay optional on this type so non-App.tsx callers don't have to wire
+ * persistence just to render a screen. */
 export interface ScreenProps {
   months: MonthData[]
   issues: ParserIssue[]
