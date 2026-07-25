@@ -66,7 +66,7 @@ export function Section({ title, actions, children }: SectionProps) {
     <section className="section">
       {(title || actions) && (
         <div className="section-head">
-          {title && <h2 className="section-title">{title}</h2>}
+          {title && <h3 className="section-title">{title}</h3>}
           {actions && <div className="section-actions">{actions}</div>}
         </div>
       )}
