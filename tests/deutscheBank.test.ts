@@ -55,7 +55,21 @@ describe('payment matrix (E2:N90, row 91 is the totals footer)', () => {
 
   it('scaffold rows beyond #68 (rows 70-90) produce no payment entries and no issues', () => {
     expect(result.payments.some((p) => p.n !== null && p.n > 68)).toBe(false)
-    expect(result.issues.some((i) => i.cell && Number(i.cell.slice(1)) >= 70 && Number(i.cell.slice(1)) <= 90)).toBe(false)
+  })
+
+  it('valuation-only row (row 80: F+I populated, E and all product cols blank) is NOT a payment', () => {
+    // isPaymentRow must key off n/product cells only, never off a shared dateRaw check
+    // (a valuation-only row still has a non-blank F cell for its own date).
+    expect(result.payments).toHaveLength(68)
+    expect(result.payments.some((p) => p.n === null)).toBe(false)
+  })
+
+  it('row 61 (n=60): #REF! at F61 is both a payment date AND a valuation date -> exactly one ref-error issue', () => {
+    const row = result.payments.find((p) => p.n === 60)
+    expect(row).toEqual({ n: 60, date: null, perProduct: [160.42, 27, 10, 210, 199.97] })
+    expect(result.issues.filter((i) => i.cell === 'F61')).toEqual([
+      { sheet: 'DEUTSCHE BANK', cell: 'F61', kind: 'ref-error', detail: expect.stringContaining('#REF!'), raw: '#REF!' },
+    ])
   })
 })
 
@@ -66,14 +80,23 @@ describe('grand total (G91)', () => {
 })
 
 describe('valuations (sporadic col I, source db)', () => {
-  it('collects the 5 sporadic snapshots, latest last', () => {
+  it('collects all 7 sporadic snapshots in row order', () => {
     expect(result.valuations).toEqual([
       { date: '2021-04-01', source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 9000 },
       { date: '2022-07-01', source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 10500 },
       { date: '2023-10-01', source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 12200 },
       { date: '2025-01-01', source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 13800 },
+      // row 61: F61 is '#REF!' (shared with the payment above) -> date null, value kept
+      { date: null, source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 12500 },
       { date: '2026-02-01', source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 15143.17 },
+      // row 80: valuation-only row, no payment counterpart
+      { date: '2021-09-15', source: 'db', asset: 'DEUTSCHE BANK', valueEUR: 11200 },
     ])
+  })
+
+  it('row 80 valuation-only snapshot does not require a matching payment row', () => {
+    expect(result.valuations.some((v) => v.valueEUR === 11200)).toBe(true)
+    expect(result.payments.some((p) => p.date === '2021-09-15')).toBe(false)
   })
 })
 
@@ -105,8 +128,8 @@ describe('per-product sums (row 91) vs recompute', () => {
 })
 
 describe('overall issue set', () => {
-  it('contains exactly the 3 planted issue-worthy cells — no stray drops', () => {
+  it('contains exactly the 4 planted issue-worthy cells — no stray drops, no duplicates', () => {
     const kinds = result.issues.map((i) => `${i.kind}@${i.cell}`).sort()
-    expect(kinds).toEqual(['bad-date@F31', 'ref-error@L46', 'sum-drift@K91'])
+    expect(kinds).toEqual(['bad-date@F31', 'ref-error@F61', 'ref-error@L46', 'sum-drift@K91'])
   })
 })

@@ -92,18 +92,24 @@ function parseProducts(values: (string | number | null)[][], issues: ParserIssue
 
 /** Payment matrix + sporadic valuations, rows 2-90, walked in a single pass
  * so each row's F (date) cell is read at most once — a row can be BOTH a
- * real payment row (E/date/product cells populated) AND a valuation row
+ * real payment row (E and/or product cells populated) AND a valuation row
  * (col I populated) simultaneously, and both would otherwise call
  * readDateAt on the same F cell independently, double-emitting any
  * bad-date/ref-error issue for that one cell. Resolving the date once and
  * reusing it for whichever of the two entries applies avoids that.
  *
- * A row counts as a real payment when its #, date, or any of the 5 product
- * cells holds a value — this excludes the fully blank scaffold rows beyond
- * the 68th real payment without needing to know "68" as a magic cutoff.
- * Column I is never itself a payment-row signal (see file header) — a row
- * with only a valuation and nothing else produces a valuation snapshot but
- * no payments[] entry. */
+ * A row counts as a real payment when its # or any of the 5 product cells
+ * holds a value — this excludes the fully blank scaffold rows beyond the
+ * 68th real payment without needing to know "68" as a magic cutoff.
+ * Deliberately NOT keyed off the F (date) cell: F is shared with the
+ * valuation side of this row (see below), so a valuation-only row — E and
+ * every product cell blank, only F (its own date) and I populated — must
+ * NOT be misread as a payment row. (Caught in review: an earlier version
+ * included `!isBlank(dateRaw)` here, which turned every valuation-only row
+ * into a phantom `{ n: null, perProduct: [null x5] }` payment.)
+ * Column I is never itself a payment-row signal — a row with only a
+ * valuation and nothing else produces a valuation snapshot but no
+ * payments[] entry. */
 function parseMatrix(
   values: (string | number | null)[][], issues: ParserIssue[]
 ): { payments: DeutscheBankData['payments']; valuations: InvestmentSnapshot[] } {
@@ -112,14 +118,15 @@ function parseMatrix(
 
   for (let row = FIRST_PAYMENT_ROW; row <= LAST_PAYMENT_ROW; row++) {
     const nRaw = cellAt(values, `E${row}`)
-    const dateRaw = cellAt(values, `F${row}`)
     const valuationRaw = cellAt(values, `I${row}`)
     const productRaws = PRODUCT_COLUMNS.map((p) => cellAt(values, `${p.col}${row}`))
-    const isPaymentRow = !isBlank(nRaw) || !isBlank(dateRaw) || productRaws.some((v) => !isBlank(v))
+    const isPaymentRow = !isBlank(nRaw) || productRaws.some((v) => !isBlank(v))
     const isValuationRow = !isBlank(valuationRaw)
     if (!isPaymentRow && !isValuationRow) continue
 
-    const date = (isPaymentRow || isValuationRow) ? readDate(values, `F${row}`, issues) : null
+    // At least one of isPaymentRow/isValuationRow is true here (the `continue`
+    // above already filtered out rows where both are false).
+    const date = readDate(values, `F${row}`, issues)
 
     if (isPaymentRow) {
       const n = isBlank(nRaw) ? null : readNumber(values, `E${row}`, issues)
