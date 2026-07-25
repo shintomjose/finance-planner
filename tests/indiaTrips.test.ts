@@ -14,6 +14,29 @@ describe('trip headers located by whole-grid text scan (never fixed rows)', () =
   })
 })
 
+describe('false-positive guard: an ordinary ledger line inside trip A that looks like a header', () => {
+  // Planted at I9/J9/K9 (unused columns, but a row INSIDE trip A's own 7-11
+  // ledger range): 'Flight 2023' / 'Total' / 5000 -- reviewer-demonstrated
+  // false positive under the old bare-year `20\d\d` pattern with no
+  // claimed-range guard (would fabricate a phantom 3rd trip named
+  // "Flight 2023"). Neither condition should trip it now: the tightened
+  // header pattern rejects "Flight 2023" outright (no "trip" keyword, no
+  // month-name+year), and even a header-shaped string in the same spot
+  // would be blocked by trip A's block already claiming rows 7-11.
+  it('does not fabricate a phantom 3rd trip', () => {
+    expect(trips).toHaveLength(2)
+    expect(trips.some((t) => t.name === 'Flight 2023')).toBe(false)
+  })
+
+  it('trip A ledger boundary is intact -- the planted cells sit in unused columns, never read', () => {
+    const trip = trips[0]
+    expect(trip.entriesINR).toHaveLength(5)
+    const sum = trip.entriesINR.reduce((s, e) => s + (e.amount ?? 0), 0)
+    expect(sum).toBe(45000)
+    expect(trip.entriesEUR).toHaveLength(3)
+  })
+})
+
 describe('Trip A (India Trip Dec 2023, header B5, no ICICI split)', () => {
   const trip = trips[0]
 
