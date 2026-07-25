@@ -95,4 +95,53 @@ describe('appState', () => {
     const result = importJSON(JSON.stringify({ categoryOverrides: { edeka: 'groceries', bad: 5 } }))
     expect(result.categoryOverrides).toEqual({ edeka: 'groceries' })
   })
+
+  it('importJSON drops non-string entries from recurringConfirmed', () => {
+    const result = importJSON(JSON.stringify({ recurringConfirmed: ['rent', 5, null, 'gym'] }))
+    expect(result.recurringConfirmed).toEqual(['rent', 'gym'])
+  })
+
+  // Locked behavior (reviewer, Plan 2 Task 7): a wrong-typed or non-finite
+  // fxRate is silently ignored and defaults to 100 — importJSON does not
+  // throw for this, only for a non-object payload.
+  it('importJSON defaults fxRate to 100 when the value is wrong-typed', () => {
+    const result = importJSON(JSON.stringify({ fxRate: 'abc' }))
+    expect(result.fxRate).toBe(100)
+  })
+
+  it('importJSON defaults fxRate to 100 when the value is non-finite', () => {
+    // JSON has no NaN literal (JSON.stringify(NaN) serializes to `null`,
+    // which JSON.parse would hand back as `null`, not NaN), so the raw JSON
+    // text is written by hand here rather than via JSON.stringify — a
+    // numeric literal this large would also trip oxlint's
+    // no-loss-of-precision rule if it appeared directly in source. Parsing
+    // it overflows to Infinity, a real non-finite `number` that exercises
+    // the same Number.isFinite guard NaN would hit.
+    const result = importJSON('{"fxRate":1e1000}')
+    expect(result.fxRate).toBe(100)
+  })
+
+  it('DEFAULT_STATE is frozen (including its nested collections) so it cannot be mutated in place', () => {
+    expect(Object.isFrozen(DEFAULT_STATE)).toBe(true)
+    expect(Object.isFrozen(DEFAULT_STATE.categoryOverrides)).toBe(true)
+    expect(Object.isFrozen(DEFAULT_STATE.goals)).toBe(true)
+    expect(Object.isFrozen(DEFAULT_STATE.recurringConfirmed)).toBe(true)
+    expect(() => DEFAULT_STATE.goals.push({ id: 'x', name: 'x', targetEUR: 1 })).toThrow()
+    // AppState.fxRate isn't typed readonly (so DEFAULT_STATE stays assignable
+    // to plain AppState-typed variables) — the freeze is runtime-only, and
+    // in ESM's implicit strict mode a write to a frozen property throws.
+    expect(() => {
+      DEFAULT_STATE.fxRate = 1
+    }).toThrow()
+  })
+
+  it('loadState/importJSON hand back independently mutable state, never the frozen DEFAULT_STATE reference', () => {
+    const fromLoad = loadState()
+    expect(fromLoad).not.toBe(DEFAULT_STATE)
+    expect(() => fromLoad.goals.push({ id: 'x', name: 'x', targetEUR: 1 })).not.toThrow()
+
+    const fromImport = importJSON('{}')
+    expect(fromImport).not.toBe(DEFAULT_STATE)
+    expect(() => fromImport.goals.push({ id: 'x', name: 'x', targetEUR: 1 })).not.toThrow()
+  })
 })

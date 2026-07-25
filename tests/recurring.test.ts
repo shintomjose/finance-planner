@@ -90,6 +90,13 @@ describe('detectRecurring — median with nulls', () => {
     const result = detectRecurring(months)
     expect(result.find((r) => r.normLabel === 'mystery')?.medianAmountEUR).toBe(0)
   })
+
+  it('averages the two middle values when the amount count is even', () => {
+    const amounts = [100, 200, 300, 400]
+    const months = amounts.map((amt, i) => month(`M${i}`, 2024, i + 1, [tx('EvenCount', amt)]))
+    const result = detectRecurring(months)
+    expect(result.find((r) => r.normLabel === 'evencount')?.medianAmountEUR).toBe(250)
+  })
 })
 
 describe('detectRecurring — trailing window', () => {
@@ -109,7 +116,7 @@ describe('detectRecurring — trailing window', () => {
     expect(rent?.hitRate).toBe(1)
   })
 
-  it('uses half-of-trailing as the monthly threshold when trailing < 12', () => {
+  it('scales the sporadic threshold too, so trailing=3 caps out at sporadic (monthly needs 4 hits, impossible in a 3-month window)', () => {
     const months: MonthData[] = []
     for (let i = 1; i <= 12; i++) {
       const expenses = i > 9 ? [tx('Netflix', 10)] : [] // present in the last 3 of 12 months
@@ -117,9 +124,21 @@ describe('detectRecurring — trailing window', () => {
     }
     const result = detectRecurring(months, 3)
     const netflix = result.find((r) => r.normLabel === 'netflix')
-    // trailing=3 -> threshold = 3/2 = 1.5; monthsSeen=3 >= 1.5 -> monthly
-    expect(netflix?.cadence).toBe('monthly')
+    expect(netflix?.cadence).toBe('sporadic')
     expect(netflix?.monthsSeen).toBe(3)
+  })
+
+  it('keeps sporadic reachable when trailing=6 (regression: previously collapsed into monthly at the same count)', () => {
+    const threeMonths: MonthData[] = []
+    const fourMonths: MonthData[] = []
+    for (let i = 1; i <= 6; i++) {
+      threeMonths.push(month(`A${i}`, 2024, i, i <= 3 ? [tx('Streaming', 9)] : []))
+      fourMonths.push(month(`B${i}`, 2024, i, i <= 4 ? [tx('Streaming', 9)] : []))
+    }
+    const threeResult = detectRecurring(threeMonths, 6)
+    const fourResult = detectRecurring(fourMonths, 6)
+    expect(threeResult.find((r) => r.normLabel === 'streaming')?.cadence).toBe('sporadic')
+    expect(fourResult.find((r) => r.normLabel === 'streaming')?.cadence).toBe('monthly')
   })
 })
 

@@ -34,15 +34,25 @@ interface Acc {
 
 /** Over the trailing N months (default 12, latest by period), finds expense
  * labels that recur often enough to be worth tracking. A label seen in ≥6 of
- * the last 12 months (or ≥ half of `trailing` when trailing < 12) is
- * 'monthly'; ≥3 months is 'sporadic'; fewer is excluded entirely. Labels
- * categorized 'transfer' (e.g. "Last Month Balance") are never candidates —
- * they're carryover bookkeeping, not spending. */
+ * the last 12 months (or ≥ half of `trailing`, scaled, when trailing < 12) is
+ * 'monthly'; ≥3 months (or ≥ a quarter of `trailing`, scaled, floored at 3)
+ * is 'sporadic'; fewer is excluded entirely.
+ *
+ * Both tiers scale with `trailing` — review fix: scaling only the monthly
+ * threshold let it collapse onto the (fixed) sporadic minimum for
+ * trailing ≤ 6, making 'sporadic' unreachable (any count that qualified for
+ * sporadic also cleared the equal-or-lower monthly bar first). The sporadic
+ * threshold is floored at 3 (matching the original fixed minimum — you need
+ * at least 3 hits to call anything a pattern, no matter how short the
+ * window), and if the two thresholds would still collide, monthly is bumped
+ * to sporadicThreshold + 1 so there's always a real gap between the tiers. */
 export function detectRecurring(months: MonthData[], trailing = 12): RecurringCandidate[] {
   const sorted = sortByPeriod(months)
   const window = trailing >= sorted.length ? sorted : sorted.slice(sorted.length - trailing)
   const n = window.length
-  const threshold = trailing < 12 ? trailing / 2 : 6
+  const sporadicThreshold = Math.max(3, Math.ceil((trailing * 3) / 12))
+  let monthlyThreshold = Math.ceil((trailing * 6) / 12)
+  if (monthlyThreshold <= sporadicThreshold) monthlyThreshold = sporadicThreshold + 1
 
   const byLabel = new Map<string, Acc>()
 
@@ -69,8 +79,8 @@ export function detectRecurring(months: MonthData[], trailing = 12): RecurringCa
   const results: RecurringCandidate[] = []
   for (const [normLabel, acc] of byLabel) {
     let cadence: 'monthly' | 'sporadic'
-    if (acc.monthsSeen >= threshold) cadence = 'monthly'
-    else if (acc.monthsSeen >= 3) cadence = 'sporadic'
+    if (acc.monthsSeen >= monthlyThreshold) cadence = 'monthly'
+    else if (acc.monthsSeen >= sporadicThreshold) cadence = 'sporadic'
     else continue
     results.push({
       normLabel,
