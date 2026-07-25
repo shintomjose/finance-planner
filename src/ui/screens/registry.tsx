@@ -1,7 +1,8 @@
 // The 9-module screen registry: ScreenId, the shared ScreenProps shape,
-// nav icons, and the lazy component for each slot. Tasks 9-13 build a real
-// module by editing ONLY this file — swap one `placeholderComponent(...)`
-// call for a real lazy import. Layout.tsx just consumes SCREEN_ORDER /
+// nav icons, and the lazy component for each slot. Tasks 9-13 built each
+// real module by editing ONLY this file — swap one `placeholderComponent(...)`
+// call for a real lazy import; Task 13 (Goals) was the last placeholder
+// slot, so every module is now real. Layout.tsx just consumes SCREEN_ORDER /
 // SCREEN_REGISTRY and never needs touching when a module lands.
 import { lazy } from 'react'
 import type { ComponentType, LazyExoticComponent, ReactNode, SVGProps } from 'react'
@@ -26,7 +27,12 @@ export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' 
  * every consumer (e.g. Budget, NetWorth, Sachin, Trips) must treat them as
  * possibly undefined and fall back sensibly (EmptyState / DEFAULT_STATE).
  * Logs has no dedicated prop — its four log kinds all live on
- * `plan.logs`, so it reads `plan` like Budget/NetWorth do. */
+ * `plan.logs`, so it reads `plan` like Budget/NetWorth do.
+ *
+ * `onStateChange` (Task 13): screens don't persist appState edits
+ * themselves — the Goals screen mutates a local copy and calls this if the
+ * caller passed one. App.tsx doesn't wire it up yet (Task 14 adds
+ * saveState + re-render), so it's optional and today always undefined. */
 export interface ScreenProps {
   months: MonthData[]
   issues: ParserIssue[]
@@ -39,6 +45,7 @@ export interface ScreenProps {
   sachin?: { ledger: PersonLedger } | null
   trips?: Trip[] | null
   appState?: AppState
+  onStateChange?: (next: AppState) => void
 }
 
 type Icon = (props: SVGProps<SVGSVGElement>) => ReactNode
@@ -192,12 +199,14 @@ const logsComponent = lazy(async () => {
   return { default: (p: ScreenProps) => <Logs plan={p.plan ?? null} /> }
 })
 
-function placeholderComponent(label: string): LazyExoticComponent<ComponentType<ScreenProps>> {
-  return lazy(async () => {
-    const { default: Placeholder } = await import('./Placeholder')
-    return { default: () => <Placeholder label={label} /> }
-  })
-}
+const goalsComponent = lazy(async () => {
+  const [{ Goals }, { DEFAULT_STATE }] = await Promise.all([import('./Goals'), import('../../state/appState')])
+  return {
+    default: (p: ScreenProps) => (
+      <Goals months={p.months} state={p.appState ?? DEFAULT_STATE} now={p.now} onStateChange={p.onStateChange} />
+    ),
+  }
+})
 
 export const SCREEN_ORDER: ScreenId[] = ['overview', 'budget', 'trends', 'networth', 'sachin', 'trips', 'logs', 'goals', 'health']
 
@@ -209,6 +218,6 @@ export const SCREEN_REGISTRY: Record<ScreenId, ScreenEntry> = {
   sachin: { label: 'Sachin', icon: IconSachin, component: sachinComponent },
   trips: { label: 'Trips', icon: IconTrips, component: tripsComponent },
   logs: { label: 'Logs', icon: IconLogs, component: logsComponent },
-  goals: { label: 'Goals', icon: IconGoals, component: placeholderComponent('Goals') },
+  goals: { label: 'Goals', icon: IconGoals, component: goalsComponent },
   health: { label: 'Parser Health', icon: IconHealth, component: healthComponent },
 }
