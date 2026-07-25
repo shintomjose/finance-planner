@@ -23,12 +23,34 @@ export interface AppState {
   recurringConfirmed: string[] // normLabels confirmed as recurring
 }
 
-export const DEFAULT_STATE: AppState = {
+/** Freezes `obj` and (one level down) every object/array-valued property, so
+ * a caller can't accidentally mutate a shared constant through a nested
+ * reference (e.g. `DEFAULT_STATE.goals.push(...)`). Shallow-plus-one is
+ * enough here: AppState's own nested values (categoryOverrides, goals,
+ * recurringConfirmed) are never more than one level deep. Returns `obj` with
+ * its original static type — Object.freeze's own typing returns
+ * Readonly<T>/ReadonlyArray<T>, which isn't assignable back to the mutable
+ * AppState shape callers expect. */
+function deepFreeze<T>(obj: T): T {
+  Object.freeze(obj)
+  if (obj && typeof obj === 'object') {
+    for (const v of Object.values(obj as Record<string, unknown>)) {
+      if (v && typeof v === 'object') Object.freeze(v)
+    }
+  }
+  return obj
+}
+
+// Frozen so it's safe to hand out as a shared reference (e.g. `loadState()`
+// comparisons, tests): nothing can silently mutate it. Every code path that
+// needs a *mutable* default state goes through `freshDefault()` below
+// instead, which builds independent objects — never derived from this one.
+export const DEFAULT_STATE: AppState = deepFreeze<AppState>({
   categoryOverrides: {},
   fxRate: 100,
   goals: [],
   recurringConfirmed: [],
-}
+})
 
 function freshDefault(): AppState {
   return { categoryOverrides: {}, fxRate: 100, goals: [], recurringConfirmed: [] }
