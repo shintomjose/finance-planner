@@ -85,7 +85,7 @@ export function Budget({ months, plan, state, now }: BudgetScreenProps) {
                 <div className="budget-row" key={row.category}>
                   <PacingBar label={row.category} plannedEUR={row.plannedMonthly} spentEUR={row.actual} formatValue={fmtEUR} />
                   <div className="budget-row-meta">
-                    <span>{fmtPct(row.pctOfMonth)} of month</span>
+                    <span>{fmtPct(row.pctOfBudget)} of budget · {fmtPct(row.pctOfMonth)} of month</span>
                     {row.over && <span className="budget-row-flag">Over budget</span>}
                   </div>
                 </div>

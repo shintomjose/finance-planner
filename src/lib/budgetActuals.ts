@@ -1,11 +1,23 @@
-// Budget vs Actual pure logic (Plan 2 Task 9). Matches each MONTHLY_PLAN
-// budget row (Budget.category — free text, e.g. "Groceries") against the
-// selected month's expenses by comparing `categorize(tx.normLabel,
-// overrides)` (the category-map bucket, e.g. 'groceries') to
-// `normLabel(budget.category)` — both sides normalized so a sheet category
-// written as "Groceries", " groceries ", etc. all match the bucket name.
-// A budget row whose category text doesn't correspond to any bucket simply
-// nets 0 actual, same as any other zero-activity category.
+// Budget vs Actual pure logic (Plan 2 Task 9). Matches MONTHLY_PLAN budget
+// rows (Budget.category — free text) against the selected month's expenses
+// with TWO-TIER matching (reviewer finding, Critical: the real sheet's
+// budget rows are granular expense labels like "Rent"/"Vodafone", not
+// coarse category-map buckets — confirmed against the repo's own
+// MONTHLY_PLAN fixture, where 23/24 rows are this shape; bucket-only
+// matching left every one of them at 0% actual and dumped all real spend
+// into `unbudgeted`):
+//
+//  - Tier 1 (primary): a tx is matched straight to a budget row when
+//    normLabel(budget.category) === tx.normLabel (e.g. a "Rent" row catches
+//    a "Rent" tx directly). This is how most real sheet rows resolve.
+//  - Tier 2 (fallback): for whatever txs tier 1 didn't consume, fall back
+//    to the original bucket match — categorize(tx.normLabel, overrides)
+//    compared to normLabel(budget.category) — so a budget row that IS
+//    written as a bucket name (e.g. "Groceries") still catches every
+//    grocery-store tx that isn't itself named "Groceries".
+//
+// A tx is consumed by at most one tier — tier 1 always wins — so nothing is
+// ever double-counted between a granular row and a same-bucket row.
 import type { Budget, MonthData } from '../types'
 import { categorize, normLabel } from './normalize'
 
@@ -79,19 +91,33 @@ export function budgetActuals(
 ): BudgetView {
   if (!month) return emptyView(budget, plannedSurplus)
 
+  const rowKeys = new Set(budget.map((b) => normLabel(b.category)))
+
+  // Tier 1: consume every tx whose exact label matches a budget row's
+  // category text. `consumed` tracks which expenses tier 2 must skip.
+  const tier1ByKey = new Map<string, number>()
+  const consumed = new Array<boolean>(month.expenses.length).fill(false)
+  month.expenses.forEach((tx, i) => {
+    if (!rowKeys.has(tx.normLabel)) return
+    tier1ByKey.set(tx.normLabel, round2((tier1ByKey.get(tx.normLabel) ?? 0) + (tx.amountEUR ?? 0)))
+    consumed[i] = true
+  })
+
+  // Tier 2: bucket-match whatever tier 1 left over.
   const byBucket = new Map<string, number>()
-  for (const tx of month.expenses) {
+  month.expenses.forEach((tx, i) => {
+    if (consumed[i]) return
     const bucket = categorize(tx.normLabel, overrides)
     byBucket.set(bucket, round2((byBucket.get(bucket) ?? 0) + (tx.amountEUR ?? 0)))
-  }
+  })
 
   const pctOfMonth = pctOfMonthElapsed(month.period, now)
   const matchedBuckets = new Set<string>()
 
   const rows: CategoryPacing[] = budget.map((b) => {
     const key = normLabel(b.category)
-    const actual = byBucket.get(key) ?? 0
     if (byBucket.has(key)) matchedBuckets.add(key)
+    const actual = round2((tier1ByKey.get(key) ?? 0) + (byBucket.get(key) ?? 0))
     const pctOfBudget = b.plannedMonthly > 0 ? round2((actual / b.plannedMonthly) * 100) : actual > 0 ? Infinity : 0
     return { category: b.category, plannedMonthly: b.plannedMonthly, actual, pctOfBudget, pctOfMonth, over: pctOfBudget > 100 }
   })
@@ -102,7 +128,7 @@ export function budgetActuals(
     .sort((a, b) => b.actual - a.actual || a.category.localeCompare(b.category))
 
   const planned = sumPlanned(budget)
-  const actualTotal = round2([...byBucket.values()].reduce((sum, v) => sum + v, 0))
+  const actualTotal = round2(month.expenses.reduce((sum, tx) => sum + (tx.amountEUR ?? 0), 0))
   const surplus = round2(planned - actualTotal)
 
   return { rows, unbudgeted, totals: { planned, actual: actualTotal, surplus, plannedSurplus } }
