@@ -16,9 +16,10 @@ import { loadWithSilentReauth } from '../lib/authRetry'
 import { bannerFor } from '../lib/banner'
 import { pickDisplayedMonth } from '../lib/period'
 import type { MonthData, ParserIssue } from '../types'
-import { Overview } from './Overview'
-import { ParserHealth } from './ParserHealth'
+import { Layout, SCREEN_REGISTRY } from './Layout'
+import type { ScreenId } from './Layout'
 import { SignIn } from './SignIn'
+import { LoadingState } from './shared'
 import './app.css'
 
 type AppState =
@@ -27,7 +28,7 @@ type AppState =
   | { kind: 'ready'; months: MonthData[]; issues: ParserIssue[] }
   | { kind: 'error'; message: string }
 
-type Tab = 'overview' | 'health'
+type Tab = ScreenId
 
 // Stable for the lifetime of the page load: both the orchestrator's
 // "which tab is current" check and Overview's fallback logic need to agree
@@ -79,7 +80,13 @@ export default function App() {
   }
 
   if (state.kind === 'unauthenticated') return <SignIn note={state.note} />
-  if (state.kind === 'loading') return <p className="status">Loading…</p>
+  if (state.kind === 'loading') {
+    return (
+      <div className="status">
+        <LoadingState label="Loading…" />
+      </div>
+    )
+  }
   if (state.kind === 'error') {
     return (
       <div className="status error">
@@ -96,26 +103,19 @@ export default function App() {
   const { bannerForDisplayedTab, otherFailedTabCount } = bannerFor(state.issues, displayedTab)
 
   return (
-    <div className="app">
-      <header>
-        <h1>Finance Planner</h1>
-        <nav className="tabs">
-          <button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>
-            Overview
-          </button>
-          <button className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>
-            Parser Health
-            {state.issues.length > 0 && <span className="badge">{state.issues.length}</span>}
-          </button>
-          {otherFailedTabCount > 0 && (
-            <span className="chip" title="Other months failed to refresh — see Parser Health for details">
-              {otherFailedTabCount} tabs failed to load
-            </span>
-          )}
-        </nav>
-      </header>
-      {bannerForDisplayedTab && <p className="banner">showing cached data</p>}
-      {tab === 'overview' ? <Overview months={state.months} now={now} /> : <ParserHealth issues={state.issues} />}
-    </div>
+    <Layout
+      active={tab}
+      onNavigate={setTab}
+      issueCount={state.issues.length}
+      banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
+      chip={
+        otherFailedTabCount > 0 ? (
+          <span className="chip" title="Other months failed to refresh — see Parser Health for details">
+            {otherFailedTabCount} tab{otherFailedTabCount === 1 ? '' : 's'} failed to load
+          </span>
+        ) : undefined
+      }
+      screenProps={{ months: state.months, issues: state.issues, now, label: SCREEN_REGISTRY[tab].label }}
+    />
   )
 }

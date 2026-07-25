@@ -1,16 +1,17 @@
 // Parser Health tab: flat table of every ParserIssue collected across the
 // load (fetch/tab-level issues plus each month's own parse issues — the
-// orchestrator already aggregates both into LoadResult.issues).
+// orchestrator already aggregates both into LoadResult.issues). Visuals
+// only were touched for the Task 8 design-system pass.
 import type { ParserIssue } from '../types'
+import { EmptyState } from './shared'
 
 export function ParserHealth({ issues }: { issues: ParserIssue[] }) {
   if (issues.length === 0) {
-    return <p>All cells parsed cleanly.</p>
+    return <EmptyState title="All clear" message="All cells parsed cleanly." />
   }
 
   return (
-    <section>
-      <h2>Parser Health</h2>
+    <section className="parser-health">
       <div className="table-wrap">
         <table>
           <thead>
