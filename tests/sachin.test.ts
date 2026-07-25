@@ -12,12 +12,20 @@ describe('given ledger (B2:C336, label-driven; dates col A only from ~row 122)',
     expect(ledger.entries).toHaveLength(15)
   })
 
-  it('early entries (rows 2-10, before ~122) have date: null and NO issue', () => {
+  it('early entries (rows 2-10, before ~122) have date: null and NO issue when A is genuinely blank', () => {
     const early = ledger.entries.filter((e) => e.row < 122)
     expect(early).toHaveLength(9)
     expect(early.every((e) => e.date === null)).toBe(true)
-    expect(issues.some((i) => i.kind === 'bad-date')).toBe(false)
     expect(early[0]).toEqual({ date: null, label: 'Cash for rent', amountEUR: 500, row: 2 })
+  })
+
+  it('planted non-blank bad date at A6 (before row 122) -> bad-date issue, entry kept with date: null', () => {
+    const row = ledger.entries.find((e) => e.row === 6)
+    expect(row).toEqual({ date: null, label: 'Travel advance', amountEUR: 400, row: 6 })
+    expect(issues).toContainEqual({
+      sheet: 'SACHIN', cell: 'A6', kind: 'bad-date',
+      detail: expect.stringContaining('40-13-2024'), raw: '40-13-2024',
+    })
   })
 
   it('late entries (rows 122+) carry a real date', () => {
@@ -97,8 +105,8 @@ describe('ledger name', () => {
 })
 
 describe('overall issue set', () => {
-  it('contains exactly the 2 planted issue-worthy cells — no stray drops', () => {
+  it('contains exactly the 3 planted issue-worthy cells — no stray drops', () => {
     const kinds = issues.map((i) => `${i.kind}@${i.cell}`).sort()
-    expect(kinds).toEqual(['bad-number@G135', 'sum-drift@G131'])
+    expect(kinds).toEqual(['bad-date@A6', 'bad-number@G135', 'sum-drift@G131'])
   })
 })
