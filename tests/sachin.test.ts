@@ -1,0 +1,104 @@
+import { describe, it, expect } from 'vitest'
+import { parseSachin } from '../src/parse/sachin'
+import fixture from './fixtures/SACHIN.json'
+import type { SpecialGrids } from '../src/data/specialTabs'
+
+const grids = fixture as SpecialGrids
+const result = parseSachin(grids)
+const { ledger, issues } = result
+
+describe('given ledger (B2:C336, label-driven; dates col A only from ~row 122)', () => {
+  it('parses 15 given entries total (9 early, no date + 6 late, with date)', () => {
+    expect(ledger.entries).toHaveLength(15)
+  })
+
+  it('early entries (rows 2-10, before ~122) have date: null and NO issue', () => {
+    const early = ledger.entries.filter((e) => e.row < 122)
+    expect(early).toHaveLength(9)
+    expect(early.every((e) => e.date === null)).toBe(true)
+    expect(issues.some((i) => i.kind === 'bad-date')).toBe(false)
+    expect(early[0]).toEqual({ date: null, label: 'Cash for rent', amountEUR: 500, row: 2 })
+  })
+
+  it('late entries (rows 122+) carry a real date', () => {
+    const late = ledger.entries.filter((e) => e.row >= 122)
+    expect(late).toHaveLength(6)
+    expect(late[0]).toEqual({ date: '2024-03-01', label: 'Rent support', amountEUR: 600, row: 122 })
+  })
+})
+
+describe('repayments (F133:G189: F date, G amount, label defaulted to "Repayment")', () => {
+  it('parses 8 repayment rows', () => {
+    expect(ledger.repayments).toHaveLength(8)
+  })
+
+  it('first repayment', () => {
+    expect(ledger.repayments[0]).toEqual({ date: '2024-03-20', label: 'Repayment', amountEUR: 300, row: 133 })
+  })
+
+  it('planted bad-number at G135 -> bad-number issue, row kept with amountEUR: null', () => {
+    const row = ledger.repayments.find((r) => r.row === 135)
+    expect(row).toEqual({ date: '2024-03-30', label: 'Repayment', amountEUR: null, row: 135 })
+    expect(issues).toContainEqual({
+      sheet: 'SACHIN', cell: 'G135', kind: 'bad-number',
+      detail: expect.stringContaining('N/A'), raw: 'N/A',
+    })
+  })
+})
+
+describe('EMI blocks located by header label in col H (fixture offsets +2 vs map: H5/H29/H45/H59)', () => {
+  it('finds all 4 EMI blocks by label, not by the map\'s fixed rows', () => {
+    expect(ledger.emis.map((e) => e.name)).toEqual(['iPhone-13', 'iPhone 14', 'Fridge', 'Washing Machine'])
+  })
+
+  it('iPhone-13 block (header H5): 4 installment rows', () => {
+    const emi = ledger.emis.find((e) => e.name === 'iPhone-13')!
+    expect(emi.rows).toHaveLength(4)
+    expect(emi.rows[0]).toEqual({ date: null, label: 'EMI 1', amountEUR: 45, row: 6 })
+  })
+
+  it('iPhone 14 block (header H29): 5 installment rows', () => {
+    const emi = ledger.emis.find((e) => e.name === 'iPhone 14')!
+    expect(emi.rows).toHaveLength(5)
+  })
+
+  it('Fridge block (header H45): 3 installment rows', () => {
+    const emi = ledger.emis.find((e) => e.name === 'Fridge')!
+    expect(emi.rows).toHaveLength(3)
+  })
+
+  it('Washing Machine block (header H59): 4 installment rows', () => {
+    const emi = ledger.emis.find((e) => e.name === 'Washing Machine')!
+    expect(emi.rows).toHaveLength(4)
+  })
+})
+
+describe('totals (recomputed, never trusting sheet formulas directly)', () => {
+  it('given/repaid/remaining are the recomputed sums', () => {
+    expect(ledger.totals).toEqual({ given: 4400, repaid: 940, remaining: 3460 })
+  })
+
+  it('planted small sum-drift on G131 (sheet 4400.05 vs recomputed 4400)', () => {
+    expect(issues).toContainEqual({
+      sheet: 'SACHIN', cell: 'G131', kind: 'sum-drift',
+      detail: expect.stringContaining('4400.05'),
+    })
+  })
+
+  it('G132 (remaining) matches the recompute exactly -> no sum-drift for it', () => {
+    expect(issues.some((i) => i.cell === 'G132')).toBe(false)
+  })
+})
+
+describe('ledger name', () => {
+  it('is Sachin', () => {
+    expect(ledger.name).toBe('Sachin')
+  })
+})
+
+describe('overall issue set', () => {
+  it('contains exactly the 2 planted issue-worthy cells — no stray drops', () => {
+    const kinds = issues.map((i) => `${i.kind}@${i.cell}`).sort()
+    expect(kinds).toEqual(['bad-number@G135', 'sum-drift@G131'])
+  })
+})
