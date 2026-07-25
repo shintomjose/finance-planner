@@ -10,7 +10,7 @@ import type { MonthlyPlanData } from '../../parse/monthlyPlan'
 import type { MutualFundsData } from '../../parse/mutualFunds'
 import type { BinanceData } from '../../parse/binance'
 import type { AppState } from '../../state/appState'
-import type { MonthData, ParserIssue } from '../../types'
+import type { MonthData, ParserIssue, PersonLedger, Trip } from '../../types'
 
 export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' | 'trips' | 'logs' | 'goals' | 'health'
 
@@ -20,11 +20,13 @@ export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' 
  * `Record<ScreenId, LazyExoticComponent<ComponentType<ScreenProps>>>`
  * regardless of which real component eventually backs a slot.
  *
- * `plan`, `mutualFunds`, `deutscheBank`, `binance`, and `appState` are
- * optional because the special-tab/state data wiring (Task 14) doesn't
- * exist yet — App.tsx doesn't pass them at all today, so every consumer
- * (e.g. Budget, NetWorth) must treat them as possibly undefined and fall
- * back sensibly (EmptyState / DEFAULT_STATE). */
+ * `plan`, `mutualFunds`, `deutscheBank`, `binance`, `sachin`, `trips`, and
+ * `appState` are optional because the special-tab/state data wiring
+ * (Task 14) doesn't exist yet — App.tsx doesn't pass them at all today, so
+ * every consumer (e.g. Budget, NetWorth, Sachin, Trips) must treat them as
+ * possibly undefined and fall back sensibly (EmptyState / DEFAULT_STATE).
+ * Logs has no dedicated prop — its four log kinds all live on
+ * `plan.logs`, so it reads `plan` like Budget/NetWorth do. */
 export interface ScreenProps {
   months: MonthData[]
   issues: ParserIssue[]
@@ -34,6 +36,8 @@ export interface ScreenProps {
   mutualFunds?: MutualFundsData | null
   deutscheBank?: DeutscheBankData | null
   binance?: BinanceData | null
+  sachin?: { ledger: PersonLedger } | null
+  trips?: Trip[] | null
   appState?: AppState
 }
 
@@ -173,6 +177,21 @@ const networthComponent = lazy(async () => {
   }
 })
 
+const sachinComponent = lazy(async () => {
+  const { Sachin } = await import('./Sachin')
+  return { default: (p: ScreenProps) => <Sachin sachin={p.sachin ?? null} issues={p.issues} /> }
+})
+
+const tripsComponent = lazy(async () => {
+  const { Trips } = await import('./Trips')
+  return { default: (p: ScreenProps) => <Trips trips={p.trips ?? null} /> }
+})
+
+const logsComponent = lazy(async () => {
+  const { Logs } = await import('./Logs')
+  return { default: (p: ScreenProps) => <Logs plan={p.plan ?? null} /> }
+})
+
 function placeholderComponent(label: string): LazyExoticComponent<ComponentType<ScreenProps>> {
   return lazy(async () => {
     const { default: Placeholder } = await import('./Placeholder')
@@ -187,9 +206,9 @@ export const SCREEN_REGISTRY: Record<ScreenId, ScreenEntry> = {
   budget: { label: 'Budget', icon: IconBudget, component: budgetComponent },
   trends: { label: 'Trends', icon: IconTrends, component: trendsComponent },
   networth: { label: 'Net worth', icon: IconNetworth, component: networthComponent },
-  sachin: { label: 'Sachin', icon: IconSachin, component: placeholderComponent('Sachin') },
-  trips: { label: 'Trips', icon: IconTrips, component: placeholderComponent('Trips') },
-  logs: { label: 'Logs', icon: IconLogs, component: placeholderComponent('Logs') },
+  sachin: { label: 'Sachin', icon: IconSachin, component: sachinComponent },
+  trips: { label: 'Trips', icon: IconTrips, component: tripsComponent },
+  logs: { label: 'Logs', icon: IconLogs, component: logsComponent },
   goals: { label: 'Goals', icon: IconGoals, component: placeholderComponent('Goals') },
   health: { label: 'Parser Health', icon: IconHealth, component: healthComponent },
 }

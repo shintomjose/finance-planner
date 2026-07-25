@@ -11,21 +11,43 @@ const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EU
 const inrFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'INR' })
 
 export interface MoneyProps {
-  amountEUR: number | null | undefined
-  /** ₹ per €. When provided (and finite), renders a secondary INR figure
-   * underneath/after the EUR amount — e.g. for Sachin/Trips screens that
-   * track rupee-denominated entries alongside their EUR equivalent. */
+  amountEUR?: number | null
+  /** Native rupee figure — Sachin/Trips carry amounts that are ₹ in the
+   * sheet itself (never a converted EUR value), so `mode: 'INR'` renders
+   * THIS as the primary figure instead of running the usual EUR-primary
+   * path. Ignored when `mode` is 'EUR' (the default). */
+  amountINR?: number | null
+  /** 'EUR' (default): `amountEUR` is primary, optionally with a secondary
+   * ≈₹ figure via `fxRate`. 'INR': `amountINR` is primary, optionally with
+   * a secondary ≈€ figure via `fxRate` (dividing rather than multiplying). */
+  mode?: 'EUR' | 'INR'
+  /** ₹ per €. When provided (and finite), renders a secondary converted
+   * figure alongside the primary amount — e.g. for Sachin/Trips screens
+   * that track rupee-denominated entries alongside their EUR equivalent. */
   fxRate?: number
   /** Opt into tabular-nums for columns that must align vertically (table
    * rows). Big standalone figures (stat-tile values) stay proportional. */
   tabular?: boolean
 }
 
-export function Money({ amountEUR, fxRate, tabular }: MoneyProps) {
+export function Money({ amountEUR, amountINR, mode = 'EUR', fxRate, tabular }: MoneyProps) {
+  const cls = tabular ? 'money money-tabular' : 'money'
+
+  if (mode === 'INR') {
+    if (amountINR == null) return <span className="money money-dash">–</span>
+    const eur = fxRate != null && Number.isFinite(fxRate) && fxRate !== 0 ? amountINR / fxRate : null
+    return (
+      <span className={cls}>
+        {inrFmt.format(amountINR)}
+        {eur != null && <span className="money-secondary">≈ {eurFmt.format(eur)}</span>}
+      </span>
+    )
+  }
+
   if (amountEUR == null) return <span className="money money-dash">–</span>
   const inr = fxRate != null && Number.isFinite(fxRate) ? amountEUR * fxRate : null
   return (
-    <span className={tabular ? 'money money-tabular' : 'money'}>
+    <span className={cls}>
       {eurFmt.format(amountEUR)}
       {inr != null && <span className="money-secondary">≈ {inrFmt.format(inr)}</span>}
     </span>
