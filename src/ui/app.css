@@ -1039,3 +1039,16 @@ tr[data-drift='true'] td {
 .trip-card-ledger .table-wrap {
   margin-top: var(--space-2);
 }
+
+/* ---------------------------------------------------------------------
+   Logs screen (screens/Logs.tsx) — subtitle above an unlabeled chart
+   block when a panel stacks more than one (e.g. gym's cost trend vs.
+   visit-frequency charts), so each chart's subject is never ambiguous.
+   --------------------------------------------------------------------- */
+
+.chart-subtitle {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}

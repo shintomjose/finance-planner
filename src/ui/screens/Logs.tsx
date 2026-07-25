@@ -23,6 +23,7 @@ const TABS: { id: LogTab; label: string }[] = [
 ]
 
 const fmtPerLitre = (v: number) => `€${v.toFixed(2)}/L`
+const fmtEURPerVisit = (v: number) => `€${v.toFixed(2)}`
 const fmtVisits = (v: number) => `${v}`
 const fmtNum = (v: number | string | null) => (typeof v === 'number' ? String(v) : '–')
 
@@ -93,6 +94,23 @@ function GymPanel({ logs }: { logs: LogEntry[] }) {
         <StatCard label="Total" value={<Money amountEUR={stats.totalEUR} tabular />} />
         <StatCard label="Avg / visit" value={<Money amountEUR={stats.avgPerVisit} tabular />} />
       </div>
+
+      {/* Cost trend (€/visit, one point per visit) — distinct from the
+          visits-per-month frequency chart below; both are informative and
+          neither substitutes for the other (reviewer finding). */}
+      <p className="chart-subtitle">€/visit trend</p>
+      {stats.perVisitSeries.length >= 2 ? (
+        <CategoryLine
+          data={stats.perVisitSeries}
+          xKey="date"
+          series={[{ key: 'amountEUR', label: '€/visit' }]}
+          valueFormatter={fmtEURPerVisit}
+        />
+      ) : (
+        <EmptyState message="Not enough dated visits to chart a €/visit trend." />
+      )}
+
+      <p className="chart-subtitle">Visits per month</p>
       {stats.monthlySeries.length > 0 ? (
         <MonthBar data={stats.monthlySeries} xKey="month" series={[{ key: 'visits', label: 'Visits' }]} valueFormatter={fmtVisits} />
       ) : (

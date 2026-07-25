@@ -112,6 +112,12 @@ export function Sachin({ sachin, issues }: SachinScreenProps) {
               const { totalRows, confirmedRows } = emiProgress(emi)
               return (
                 <div className="budget-row" key={emi.name}>
+                  {/* PacingBar's props are named plannedEUR/spentEUR (money), but
+                      per emiProgress's doc comment above there's no target loan
+                      amount to measure against here — these two are actually
+                      ROW COUNTS (total rows / rows with a confirmed amount), not
+                      euros. `installmentFmt` renders them as "N installments" so
+                      the display is honest even though the prop names aren't. */}
                   <PacingBar label={emi.name} plannedEUR={totalRows} spentEUR={confirmedRows} formatValue={installmentFmt} />
                 </div>
               )
