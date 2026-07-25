@@ -75,7 +75,7 @@ describe('petrolStats', () => {
 
 describe('gymStats', () => {
   it('empty logs -> all zeros/nulls', () => {
-    expect(gymStats([])).toEqual({ visits: 0, totalEUR: 0, avgPerVisit: null, monthlySeries: [] })
+    expect(gymStats([])).toEqual({ visits: 0, totalEUR: 0, avgPerVisit: null, monthlySeries: [], perVisitSeries: [] })
   })
 
   it('ignores non-gym entries and sums visits/EUR', () => {
@@ -84,6 +84,19 @@ describe('gymStats', () => {
     expect(stats.visits).toBe(2)
     expect(stats.totalEUR).toBe(50)
     expect(stats.avgPerVisit).toBe(25)
+  })
+
+  it('perVisitSeries carries every dated visit with a non-null amount, chronologically sorted (cost trend, not frequency)', () => {
+    const logs = [
+      gym('2026-02-01', 30),
+      gym('2026-01-05', 25),
+      gym(null, 25), // no date -> excluded
+      gym('2026-01-20', null), // no amount -> excluded
+    ]
+    expect(gymStats(logs).perVisitSeries).toEqual([
+      { date: '2026-01-05', amountEUR: 25 },
+      { date: '2026-02-01', amountEUR: 30 },
+    ])
   })
 
   it('monthlySeries groups by YYYY-MM, chronologically sorted, dateless visits excluded', () => {

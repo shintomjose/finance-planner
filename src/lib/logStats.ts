@@ -20,6 +20,10 @@ export interface GymStats {
   totalEUR: number
   avgPerVisit: number | null
   monthlySeries: { month: string; visits: number }[]
+  /** €/visit COST trend over time — distinct from `monthlySeries`, which
+   * is visit FREQUENCY per month. Each dated visit with a known amount is
+   * its own point (not monthly-aggregated), chronologically sorted. */
+  perVisitSeries: { date: string; amountEUR: number }[]
 }
 
 /** LogEntry.fields values are `number | string | null` (a shared shape
@@ -100,6 +104,14 @@ export function petrolStats(logs: LogEntry[]): PetrolStats {
  * full ISO strings when present), chronologically sorted; a visit with no
  * date can't be placed on the series so it's excluded from it (it still
  * counts toward `visits`/`totalEUR`/`avgPerVisit`, which don't need a date).
+ *
+ * `perVisitSeries` is the €/visit COST trend — reviewer finding: the
+ * brief asked for a "gym €/visit trend" chart-data helper, which
+ * `monthlySeries` (visit FREQUENCY per month) does not provide. Each
+ * dated visit with a known amount becomes its own point (one per fill,
+ * not aggregated to a month), chronologically sorted the same way
+ * `petrolStats.series` is — a visit missing either field is dropped
+ * rather than plotted at a wrong/zero x or y.
  */
 export function gymStats(logs: LogEntry[]): GymStats {
   const gym = byLog(logs, 'gym')
@@ -117,7 +129,12 @@ export function gymStats(logs: LogEntry[]): GymStats {
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([month, visits]) => ({ month, visits }))
 
-  return { visits, totalEUR, avgPerVisit, monthlySeries }
+  const perVisitSeries = gym
+    .filter((g): g is LogEntry & { date: string } => g.date != null && num(g.fields.amountEUR) != null)
+    .map((g) => ({ date: g.date, amountEUR: num(g.fields.amountEUR) as number }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+
+  return { visits, totalEUR, avgPerVisit, monthlySeries, perVisitSeries }
 }
 
 /** Gear entries split across two independent parser blocks (EUR-only and
