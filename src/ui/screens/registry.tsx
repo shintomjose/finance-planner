@@ -5,7 +5,10 @@
 // SCREEN_REGISTRY and never needs touching when a module lands.
 import { lazy } from 'react'
 import type { ComponentType, LazyExoticComponent, ReactNode, SVGProps } from 'react'
+import type { DeutscheBankData } from '../../parse/deutscheBank'
 import type { MonthlyPlanData } from '../../parse/monthlyPlan'
+import type { MutualFundsData } from '../../parse/mutualFunds'
+import type { BinanceData } from '../../parse/binance'
 import type { AppState } from '../../state/appState'
 import type { MonthData, ParserIssue } from '../../types'
 
@@ -17,16 +20,20 @@ export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' 
  * `Record<ScreenId, LazyExoticComponent<ComponentType<ScreenProps>>>`
  * regardless of which real component eventually backs a slot.
  *
- * `plan` and `appState` are optional because the special-tab/state data
- * wiring (Task 14) doesn't exist yet — App.tsx doesn't pass them at all
- * today, so every consumer (e.g. Budget) must treat them as possibly
- * undefined and fall back sensibly (EmptyState / DEFAULT_STATE). */
+ * `plan`, `mutualFunds`, `deutscheBank`, `binance`, and `appState` are
+ * optional because the special-tab/state data wiring (Task 14) doesn't
+ * exist yet — App.tsx doesn't pass them at all today, so every consumer
+ * (e.g. Budget, NetWorth) must treat them as possibly undefined and fall
+ * back sensibly (EmptyState / DEFAULT_STATE). */
 export interface ScreenProps {
   months: MonthData[]
   issues: ParserIssue[]
   now: Date
   label: string
   plan?: MonthlyPlanData | null
+  mutualFunds?: MutualFundsData | null
+  deutscheBank?: DeutscheBankData | null
+  binance?: BinanceData | null
   appState?: AppState
 }
 
@@ -149,6 +156,23 @@ const trendsComponent = lazy(async () => {
   }
 })
 
+const networthComponent = lazy(async () => {
+  const [{ NetWorth }, { DEFAULT_STATE }] = await Promise.all([import('./NetWorth'), import('../../state/appState')])
+  return {
+    default: (p: ScreenProps) => (
+      <NetWorth
+        months={p.months}
+        plan={p.plan ?? null}
+        mutualFunds={p.mutualFunds ?? null}
+        deutscheBank={p.deutscheBank ?? null}
+        binance={p.binance ?? null}
+        fxRate={(p.appState ?? DEFAULT_STATE).fxRate}
+        now={p.now}
+      />
+    ),
+  }
+})
+
 function placeholderComponent(label: string): LazyExoticComponent<ComponentType<ScreenProps>> {
   return lazy(async () => {
     const { default: Placeholder } = await import('./Placeholder')
@@ -162,7 +186,7 @@ export const SCREEN_REGISTRY: Record<ScreenId, ScreenEntry> = {
   overview: { label: 'Overview', icon: IconOverview, component: overviewComponent },
   budget: { label: 'Budget', icon: IconBudget, component: budgetComponent },
   trends: { label: 'Trends', icon: IconTrends, component: trendsComponent },
-  networth: { label: 'Net worth', icon: IconNetworth, component: placeholderComponent('Net worth') },
+  networth: { label: 'Net worth', icon: IconNetworth, component: networthComponent },
   sachin: { label: 'Sachin', icon: IconSachin, component: placeholderComponent('Sachin') },
   trips: { label: 'Trips', icon: IconTrips, component: placeholderComponent('Trips') },
   logs: { label: 'Logs', icon: IconLogs, component: placeholderComponent('Logs') },

@@ -884,3 +884,91 @@ tbody tr:nth-child(even) {
 tr[data-drift='true'] td {
   background: var(--status-warning-wash);
 }
+
+/* ---------------------------------------------------------------------
+   Net worth (screens/NetWorth.tsx)
+   --------------------------------------------------------------------- */
+
+.networth-rows {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--hairline);
+}
+
+.networth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-1);
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--text-sm);
+}
+
+.networth-row-label {
+  flex: 1;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.networth-row-figures {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.networth-row-invested {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.networth-row-disconnected {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.networth-row-pl {
+  min-width: 8rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.networth-row-pl[data-tone='good'] {
+  color: var(--success);
+}
+
+.networth-row-pl[data-tone='bad'] {
+  color: var(--danger);
+}
+
+.networth-row-pl-pct {
+  font-weight: 400;
+  font-size: var(--text-xs);
+}
+
+.networth-projection-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.networth-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--ink-secondary);
+}
+
+.networth-input {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  width: 8rem;
+}
