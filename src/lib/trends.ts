@@ -5,8 +5,9 @@
 // (normalize.ts) for bucketing and the same defensive re-sort-by-period
 // pattern as carryover.ts's computeChain — callers pass MonthData[] already
 // sorted, but nothing here assumes it.
+import { round2, sortByPeriod, sumAmounts } from './mathUtils'
 import { categorize } from './normalize'
-import type { MonthData, Tx } from '../types'
+import type { MonthData } from '../types'
 
 export interface MonthlyPoint { tab: string; year: number; month: number; income: number; expense: number; net: number }
 export interface CategorySeries { category: string; points: { tab: string; value: number }[] }
@@ -15,24 +16,16 @@ export interface TopMover { category: string; current: number; trailingAvg: numb
 export interface HouseholdSplitPoint { tab: string; household: number; other: number }
 
 const OTHER_CATEGORY = 'other'
-const MIN_MOVER_DELTA_EUR = 20
+// Exported so the screen can echo the same number in copy ("moved by more
+// than €20...") instead of hand-syncing a second literal (reviewer minor).
+export const MIN_MOVER_DELTA_EUR = 20
 const MAX_MOVERS = 8
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-const round2 = (n: number): number => Math.round(n * 100) / 100
-
-function sortByPeriod(months: MonthData[]): MonthData[] {
-  return [...months].sort((a, b) => a.period.year - b.period.year || a.period.month - b.period.month)
-}
-
-function sumAmounts(txs: Tx[]): number {
-  return round2(txs.reduce((sum, t) => sum + (t.amountEUR ?? 0), 0))
-}
-
 export function monthlyTotals(months: MonthData[]): MonthlyPoint[] {
   return sortByPeriod(months).map((m) => {
-    const income = sumAmounts(m.income)
-    const expense = sumAmounts(m.expenses)
+    const income = round2(sumAmounts(m.income))
+    const expense = round2(sumAmounts(m.expenses))
     return { tab: m.tab, year: m.period.year, month: m.period.month, income, expense, net: round2(income - expense) }
   })
 }
@@ -73,7 +66,7 @@ export function yoySameMonth(months: MonthData[], now: Date): YoYDelta[] {
   const byPeriod = new Map<string, MonthData>()
   for (const m of months) byPeriod.set(`${m.period.year}-${m.period.month}`, m)
 
-  const expenseTotal = (m: MonthData | undefined): number | null => (m ? sumAmounts(m.expenses) : null)
+  const expenseTotal = (m: MonthData | undefined): number | null => (m ? round2(sumAmounts(m.expenses)) : null)
 
   const result: YoYDelta[] = []
   for (let month = 1; month <= 12; month++) {
@@ -87,7 +80,7 @@ export function yoySameMonth(months: MonthData[], now: Date): YoYDelta[] {
 }
 
 function categoryTotal(month: MonthData, category: string, overrides: Record<string, string>): number {
-  return sumAmounts(month.expenses.filter((tx) => categorize(tx.normLabel, overrides) === category))
+  return round2(sumAmounts(month.expenses.filter((tx) => categorize(tx.normLabel, overrides) === category)))
 }
 
 export function topMovers(months: MonthData[], overrides: Record<string, string>, trailing = 3): TopMover[] {

@@ -7,7 +7,7 @@
 // same as Budget's PacingBar chunk stays recharts-free.
 import { useMemo, useState } from 'react'
 import { computeChain } from '../../lib/carryover'
-import { categorySeries, householdSplit, monthlyTotals, topMovers, yoySameMonth } from '../../lib/trends'
+import { MIN_MOVER_DELTA_EUR, categorySeries, householdSplit, monthlyTotals, topMovers, yoySameMonth } from '../../lib/trends'
 import type { AppState } from '../../state/appState'
 import type { MonthData } from '../../types'
 import { CategoryLine } from '../charts/CategoryLine'
@@ -56,18 +56,30 @@ export function Trends({ months, state, now }: TrendsScreenProps) {
     )
   }
 
-  const netData = sliceRange(totals, range).map((p) => ({ tab: p.tab, income: p.income, expense: p.expense }))
+  // The 12/24/all toggle is screen-level (reviewer finding): it windows every
+  // month-indexed section (net, category lines, household split) by the same
+  // tab set, sliced from `totals` (chronologically sorted) AFTER the sort so
+  // "last 12" always means the 12 most recent months, never input order. YoY
+  // (its own year window), top movers (its own trailing window), and
+  // carryover drift (the full chain, for auditability) intentionally stay
+  // range-independent.
+  const rangedTotals = sliceRange(totals, range)
+  const rangedTabs = new Set(rangedTotals.map((p) => p.tab))
+  const netData = rangedTotals.map((p) => ({ tab: p.tab, income: p.income, expense: p.expense }))
 
-  const categoryTabs = series[0]?.points.map((p) => p.tab) ?? []
+  const rangedSeries = series.map((s) => ({ ...s, points: s.points.filter((p) => rangedTabs.has(p.tab)) }))
+  const categoryTabs = rangedSeries[0]?.points.map((p) => p.tab) ?? []
   const categoryData = categoryTabs.map((tab, i) => {
     const row: Record<string, unknown> = { tab }
-    for (const s of series) row[s.category] = s.points[i]?.value ?? 0
+    for (const s of rangedSeries) row[s.category] = s.points[i]?.value ?? 0
     return row
   })
-  const categorySeriesDefs = series.map((s) => ({ key: s.category, label: labelFor(s.category) }))
+  const categorySeriesDefs = rangedSeries.map((s) => ({ key: s.category, label: labelFor(s.category) }))
 
   const yoyData = yoy.map((d) => ({ month: d.monthName, previous: d.previous ?? 0, current: d.current ?? 0 }))
-  const householdData = household.map((h) => ({ tab: h.tab, household: h.household, other: h.other }))
+  const householdData = household
+    .filter((h) => rangedTabs.has(h.tab))
+    .map((h) => ({ tab: h.tab, household: h.household, other: h.other }))
   const driftSpark = drift.map((d) => d.driftEUR ?? 0)
 
   return (
@@ -123,7 +135,9 @@ export function Trends({ months, state, now }: TrendsScreenProps) {
 
       <Section title="Top movers">
         {movers.length === 0 ? (
-          <EmptyState message="No category moved by more than €20 vs. its trailing 3-month average." />
+          <EmptyState
+            message={`No category moved by more than €${MIN_MOVER_DELTA_EUR} vs. its trailing 3-month average.`}
+          />
         ) : (
           <ul className="movers-list">
             {movers.map((m) => (
