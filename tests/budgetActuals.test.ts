@@ -160,6 +160,71 @@ describe('budgetActuals — totals', () => {
   })
 })
 
+// Reviewer finding (Critical): the real MONTHLY_PLAN sheet's budget rows are
+// granular expense labels (Rent, Insurance, Fuel...), not coarse category
+// buckets — the repo's own MONTHLY_PLAN fixture confirms 23/24 rows are this
+// shape. Bucket-only matching left every one of those rows at 0% actual and
+// dumped all real spend into `unbudgeted`. Two-tier fix: tier 1 matches a tx
+// straight to a budget row by exact label (normLabel(budget.category) ===
+// tx.normLabel); tier 2 falls back to the old bucket match, but only over
+// txs tier 1 left untouched, so a tx is never counted twice.
+describe('budgetActuals — two-tier matching (label match, then bucket fallback)', () => {
+  const REAL_SHAPED_BUDGET: Budget[] = [
+    { category: 'Rent', plannedMonthly: 850 },
+    { category: 'Insurance', plannedMonthly: 150 },
+    { category: 'Fuel', plannedMonthly: 150 },
+  ]
+
+  it('tier 1: matches a granular budget row straight to the tx with the same label', () => {
+    const m = month(2024, 6, [tx('Rent', 850), tx('Insurance', 140), tx('Fuel', 90)])
+    const view = budgetActuals(m, REAL_SHAPED_BUDGET, {}, new Date(2024, 5, 15), null)
+    expect(view.rows.find((r) => r.category === 'Rent')?.actual).toBe(850)
+    expect(view.rows.find((r) => r.category === 'Insurance')?.actual).toBe(140)
+    expect(view.rows.find((r) => r.category === 'Fuel')?.actual).toBe(90)
+    expect(view.unbudgeted).toEqual([])
+  })
+
+  it('tier 1 is case/whitespace-insensitive on the label match too', () => {
+    const m = month(2024, 6, [tx('rent  ', 850)])
+    const view = budgetActuals(m, REAL_SHAPED_BUDGET, {}, new Date(2024, 5, 15), null)
+    expect(view.rows.find((r) => r.category === 'Rent')?.actual).toBe(850)
+  })
+
+  it('mixed sheet: a bucket-style row and a granular row both resolve correctly, no double counting', () => {
+    const mixedBudget: Budget[] = [
+      { category: 'Groceries', plannedMonthly: 300 }, // bucket-style — tier 2 only
+      { category: 'Rent', plannedMonthly: 850 }, // granular — tier 1
+    ]
+    const m = month(2024, 6, [tx('Edeka', 120), tx('Rent', 850)])
+    const view = budgetActuals(m, mixedBudget, {}, new Date(2024, 5, 15), null)
+    // 'edeka' -> not consumed by tier 1 (no row named "Edeka") -> tier 2
+    // bucket match ('groceries') lands it on the Groceries row.
+    expect(view.rows.find((r) => r.category === 'Groceries')?.actual).toBe(120)
+    // 'rent' -> tier 1 label match on the Rent row. It must NOT also be
+    // counted as bucket 'fixed' spend anywhere (no 'Fixed' row exists here,
+    // but the point is it's consumed once, not left over for anything else).
+    expect(view.rows.find((r) => r.category === 'Rent')?.actual).toBe(850)
+    expect(view.totals.actual).toBe(970)
+    expect(view.unbudgeted).toEqual([])
+  })
+
+  it('a tx consumed by tier 1 is not also double-counted into a same-bucket row via tier 2', () => {
+    // Both a granular 'Rent' row AND a bucket-style 'Fixed' row exist. The
+    // 'rent' tx (which is also bucket 'fixed') must be attributed to Rent
+    // only — Fixed must not also pick it up via the bucket fallback.
+    const budget: Budget[] = [
+      { category: 'Rent', plannedMonthly: 850 },
+      { category: 'Fixed', plannedMonthly: 1000 },
+    ]
+    const m = month(2024, 6, [tx('Rent', 850), tx('Vodafone', 40)]) // Vodafone -> fixed bucket too, no direct row
+    const view = budgetActuals(m, budget, {}, new Date(2024, 5, 15), null)
+    expect(view.rows.find((r) => r.category === 'Rent')?.actual).toBe(850)
+    // Fixed only picks up the leftover bucket spend (Vodafone), not Rent's.
+    expect(view.rows.find((r) => r.category === 'Fixed')?.actual).toBe(40)
+    expect(view.totals.actual).toBe(890)
+  })
+})
+
 describe('budgetActuals — no month selected', () => {
   it('returns every budget row at zero actual, no spill, totals from budget alone', () => {
     const view = budgetActuals(undefined, BUDGET, {}, new Date(2024, 5, 15), 538.69)
