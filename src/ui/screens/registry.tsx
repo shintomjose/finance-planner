@@ -142,6 +142,13 @@ const budgetComponent = lazy(async () => {
   }
 })
 
+const trendsComponent = lazy(async () => {
+  const [{ Trends }, { DEFAULT_STATE }] = await Promise.all([import('./Trends'), import('../../state/appState')])
+  return {
+    default: (p: ScreenProps) => <Trends months={p.months} state={p.appState ?? DEFAULT_STATE} now={p.now} />,
+  }
+})
+
 function placeholderComponent(label: string): LazyExoticComponent<ComponentType<ScreenProps>> {
   return lazy(async () => {
     const { default: Placeholder } = await import('./Placeholder')
@@ -154,7 +161,7 @@ export const SCREEN_ORDER: ScreenId[] = ['overview', 'budget', 'trends', 'networ
 export const SCREEN_REGISTRY: Record<ScreenId, ScreenEntry> = {
   overview: { label: 'Overview', icon: IconOverview, component: overviewComponent },
   budget: { label: 'Budget', icon: IconBudget, component: budgetComponent },
-  trends: { label: 'Trends', icon: IconTrends, component: placeholderComponent('Trends') },
+  trends: { label: 'Trends', icon: IconTrends, component: trendsComponent },
   networth: { label: 'Net worth', icon: IconNetworth, component: placeholderComponent('Net worth') },
   sachin: { label: 'Sachin', icon: IconSachin, component: placeholderComponent('Sachin') },
   trips: { label: 'Trips', icon: IconTrips, component: placeholderComponent('Trips') },
