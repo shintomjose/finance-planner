@@ -7,7 +7,7 @@
 // ("not connected yet" — Task 14 hasn't wired mutualFunds/deutscheBank/
 // binance into App.tsx yet, so those props are undefined today).
 import { useMemo, useState } from 'react'
-import { round2 } from '../../lib/mathUtils'
+import { round1, round2 } from '../../lib/mathUtils'
 import { buildNetWorth, project } from '../../lib/networth'
 import { pickDisplayedMonth } from '../../lib/period'
 import type { NetWorthSource } from '../../lib/networth'
@@ -97,9 +97,15 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
           <StatCard label="Invested" value={<Money amountEUR={view.investedTotalEUR} tabular />} />
           <StatCard
             label="P/L vs. invested"
-            value={<Money amountEUR={round2(view.totalEUR - view.investedTotalEUR)} tabular />}
+            value={
+              netPl == null ? (
+                <Money amountEUR={null} tabular />
+              ) : (
+                <Money amountEUR={round2(view.totalEUR - view.investedTotalEUR)} tabular />
+              )
+            }
             sub={netPl != null ? `${netPl > 0 ? '+' : ''}${netPl}%` : undefined}
-            tone={view.totalEUR - view.investedTotalEUR >= 0 ? 'good' : 'bad'}
+            tone={netPl == null ? 'neutral' : view.totalEUR - view.investedTotalEUR >= 0 ? 'good' : 'bad'}
           />
         </div>
       </Section>
@@ -177,5 +183,3 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
     </div>
   )
 }
-
-const round1 = (n: number): number => Math.round(n * 10) / 10

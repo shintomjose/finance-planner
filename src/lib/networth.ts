@@ -149,22 +149,24 @@ export function buildNetWorth(
 
 /**
  * Compounds `startEUR` forward `years` annual periods at `ratePct`, adding
- * `yearlyContribution` at the START of each period before that period's
- * growth is applied: `v = (v + contribution) * (1 + rate / 100)`. This is
- * an annuity-due shape (contribute, then grow) rather than annuity-ordinary
- * (grow, then contribute) — chosen to match "money goes in at the start of
- * the year and earns a full year's return", the more common way a
- * DIY retirement-projection sheet like MONTHLY_PLAN's K11:R26 block is
- * built. `point.year` is a 1-indexed offset from `startEUR` (1 = one
- * compounding period out), not a calendar year — a caller that wants
- * calendar years (e.g. the screen, using `now`) maps offsets onto them
- * separately.
+ * `yearlyContribution` at the END of each period after that period's growth
+ * is applied: `v = v * (1 + rate / 100) + contribution`. This is an
+ * ordinary-annuity shape (grow, then contribute) — confirmed against
+ * MONTHLY_PLAN's own K11:R26 projection fixture (rate 7.5%, yearly
+ * contribution 6000, starting 21000): the sheet's first three steps are
+ * 21000 → 28575 → 36718 → 45472, which this formula reproduces exactly
+ * (21000*1.075+6000=28575, 28575*1.075+6000=36718.125≈36718, …). An
+ * earlier annuity-due draft (contribute-then-grow) diverges from the sheet
+ * by ~5% by year 12 — reviewer finding. `point.year` is a 1-indexed offset
+ * from `startEUR` (1 = one compounding period out), not a calendar year —
+ * a caller that wants calendar years (e.g. the screen, using `now`) maps
+ * offsets onto them separately.
  */
 export function project(startEUR: number, ratePct: number, yearlyContribution: number, years: number): ProjectionPoint[] {
   const points: ProjectionPoint[] = []
   let v = startEUR
   for (let year = 1; year <= years; year++) {
-    v = (v + yearlyContribution) * (1 + ratePct / 100)
+    v = v * (1 + ratePct / 100) + yearlyContribution
     points.push({ year, valueEUR: round2(v) })
   }
   return points
