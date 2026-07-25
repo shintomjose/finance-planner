@@ -117,8 +117,18 @@ export function Sachin({ sachin, issues }: SachinScreenProps) {
                       amount to measure against here — these two are actually
                       ROW COUNTS (total rows / rows with a confirmed amount), not
                       euros. `installmentFmt` renders them as "N installments" so
-                      the display is honest even though the prop names aren't. */}
-                  <PacingBar label={emi.name} plannedEUR={totalRows} spentEUR={confirmedRows} formatValue={installmentFmt} />
+                      the display is honest even though the prop names aren't.
+                      direction="fill" (review fix, Task 13): more confirmed
+                      rows is completion, not overspend — the default 'spend'
+                      ramp read a fully-confirmed EMI as "critical", which is
+                      backwards. */}
+                  <PacingBar
+                    label={emi.name}
+                    plannedEUR={totalRows}
+                    spentEUR={confirmedRows}
+                    formatValue={installmentFmt}
+                    direction="fill"
+                  />
                 </div>
               )
             })}

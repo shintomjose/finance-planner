@@ -37,8 +37,11 @@ const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EU
 const fmtEUR = (v: number) => (Number.isFinite(v) ? eurFmt.format(v) : eurFmt.format(0))
 
 // Every category the seed map assigns to, alphabetized for a stable <select>
-// order, plus 'uncategorized' itself (categorize()'s fallback bucket — not a
-// SEED_CATEGORIES value, so it's added explicitly) so a row can be reset.
+// order. Deliberately does NOT include 'uncategorized' itself: this dropdown
+// only ever renders next to a row that `uncategorizedRanking()` already
+// found to be uncategorized, so assigning it 'uncategorized' would be a
+// no-op override — a wasted key in categoryOverrides. To send a label back
+// to uncategorized, remove its existing override instead (the list below).
 const CATEGORY_OPTIONS = [...new Set(Object.values(SEED_CATEGORIES))].sort()
 
 interface GoalDraft {
@@ -81,11 +84,24 @@ function goalFromDraft(draft: GoalDraft, id: string): Goal | null {
   return goal
 }
 
+/** Four badge states, not three — `monthsRemaining == null` (no targetDate
+ * at all) and `monthsRemaining <= 0` (a targetDate that's already gone by)
+ * both leave `feasible` null, but they're not the same situation for the
+ * user: one just hasn't set a date yet, the other needs a decision (push
+ * the date or top it up). Distinguishing them needs `monthsRemaining`
+ * itself, not just the derived `feasible` flag. */
 function FeasibilityBadge({ feasibility }: { feasibility: GoalFeasibility | undefined }) {
-  if (!feasibility || feasibility.feasible == null) {
+  if (!feasibility || feasibility.monthsRemaining == null) {
     return (
       <span className="goal-badge" data-tone="neutral">
         No date
+      </span>
+    )
+  }
+  if (feasibility.monthsRemaining <= 0) {
+    return (
+      <span className="goal-badge" data-tone="warning">
+        Date passed
       </span>
     )
   }
@@ -326,7 +342,13 @@ export function Goals({ months, state: initialState, now, onStateChange }: Goals
                       </button>
                     </div>
                   </div>
-                  <PacingBar label="Progress" plannedEUR={g.targetEUR} spentEUR={g.currentEUR ?? 0} formatValue={fmtEUR} />
+                  <PacingBar
+                    label="Progress"
+                    plannedEUR={g.targetEUR}
+                    spentEUR={g.currentEUR ?? 0}
+                    formatValue={fmtEUR}
+                    direction="fill"
+                  />
                   <div className="goal-card-meta">
                     <FeasibilityBadge feasibility={f} />
                     {f?.requiredPerMonth != null ? (

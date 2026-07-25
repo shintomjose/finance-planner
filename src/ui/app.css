@@ -529,10 +529,6 @@ button {
   font-size: var(--text-sm);
 }
 
-.screen-placeholder {
-  padding-top: var(--space-4);
-}
-
 .loading-state {
   display: inline-flex;
   align-items: center;
@@ -750,6 +746,18 @@ tbody tr:nth-child(even) {
 
 .pacing-bar[data-tone='critical'] .pacing-bar-fill {
   background: var(--status-critical);
+}
+
+/* 'neutral' — direction='fill' only (Goals/Sachin EMI progress): solid
+   progress that doesn't need a status color at all, just the muted-ink
+   ramp shared with de-emphasized chart marks (charts/palette.ts's
+   `neutral`), not one of the three reserved status colors. */
+.pacing-bar[data-tone='neutral'] .pacing-bar-track {
+  background: var(--surface-2);
+}
+
+.pacing-bar[data-tone='neutral'] .pacing-bar-fill {
+  background: var(--ink-muted);
 }
 
 /* ---------------------------------------------------------------------
