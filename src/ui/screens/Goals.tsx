@@ -13,14 +13,14 @@
 // prop once, on mount) and calls `onStateChange` — if the caller passed
 // one — on every edit, so Task 14 only has to plug a listener in, not
 // restructure this component.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { round2 } from '../../lib/mathUtils'
 import { SEED_CATEGORIES } from '../../lib/normalize'
 import { goalFeasibility, uncategorizedRanking } from '../../lib/goalMath'
 import type { GoalFeasibility } from '../../lib/goalMath'
 import { detectRecurring } from '../../lib/recurring'
-import { exportJSON, importJSON } from '../../state/appState'
+import { exportJSON, importJSON, parseFxRateInput } from '../../state/appState'
 import type { AppState, Goal } from '../../state/appState'
 import type { MonthData } from '../../types'
 import { PacingBar } from '../charts/PacingBar'
@@ -171,6 +171,37 @@ export function Goals({ months, state: initialState, now, onStateChange }: Goals
     const categoryOverrides = { ...state.categoryOverrides }
     delete categoryOverrides[normLabel]
     commit({ ...state, categoryOverrides })
+  }
+
+  // --- Data: fx rate ------------------------------------------------------
+  // Local text mirror of state.fxRate so the field can hold invalid/in-
+  // progress typing (e.g. "9" before "92") without committing it. Resyncs
+  // from state.fxRate only when it no longer matches what's already typed —
+  // i.e. on an external change (import) — so it doesn't fight the user's
+  // own keystrokes mid-edit (a same-value commit round-trip is a no-op).
+  const [fxRateInput, setFxRateInput] = useState(String(state.fxRate))
+  const [fxRateNote, setFxRateNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (parseFxRateInput(fxRateInput) !== state.fxRate) setFxRateInput(String(state.fxRate))
+    // Deliberately depends on state.fxRate only, not fxRateInput — this
+    // effect exists to resync from EXTERNAL changes to state.fxRate (e.g.
+    // import), not to re-run on every keystroke the user types locally.
+  }, [state.fxRate])
+
+  const handleFxRateInput = (value: string) => {
+    setFxRateInput(value)
+    const parsed = parseFxRateInput(value)
+    if (parsed === null) {
+      setFxRateNote('Enter a positive number — keeping the previous FX rate.')
+      return
+    }
+    setFxRateNote(null)
+    commit({ ...state, fxRate: parsed })
+  }
+
+  const handleFxRateBlur = () => {
+    if (parseFxRateInput(fxRateInput) === null) setFxRateInput(String(state.fxRate))
   }
 
   // --- Data: export / import --------------------------------------------
@@ -435,6 +466,20 @@ export function Goals({ months, state: initialState, now, onStateChange }: Goals
       </Section>
 
       <Section title="Data">
+        <label className="goal-form-field fx-rate-field">
+          ₹ per € (FX rate)
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={fxRateInput}
+            onChange={(e) => handleFxRateInput(e.target.value)}
+            onBlur={handleFxRateBlur}
+            aria-label="₹ per € (FX rate)"
+          />
+        </label>
+        {fxRateNote && <p className="data-import-error">{fxRateNote}</p>}
+
         <div className="data-actions">
           <button type="button" onClick={handleExport}>
             Export JSON

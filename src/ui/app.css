@@ -1436,6 +1436,11 @@ tr[data-drift='true'] td {
   cursor: pointer;
 }
 
+.fx-rate-field {
+  max-width: 14rem;
+  margin-bottom: var(--space-4);
+}
+
 .data-actions {
   display: flex;
   flex-wrap: wrap;

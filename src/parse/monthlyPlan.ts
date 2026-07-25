@@ -260,7 +260,7 @@ function parseGymBlock(values: (string | number | null)[][], issues: ParserIssue
  * header). */
 function parsePetrolBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 82; row <= 152; row++) {
+  for (let row = 82; row <= 153; row++) {
     const r = resolveLogRow(values, issues, `F${row}`, `H${row}`)
     if (!r.include) continue
     const litres = readNumber(values, `G${row}`, issues)
