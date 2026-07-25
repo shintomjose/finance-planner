@@ -751,3 +751,42 @@ tbody tr:nth-child(even) {
 .pacing-bar[data-tone='critical'] .pacing-bar-fill {
   background: var(--status-critical);
 }
+
+/* ---------------------------------------------------------------------
+   Budget vs Actual (screens/Budget.tsx)
+   --------------------------------------------------------------------- */
+
+.budget-month-select {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.budget-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.budget-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.budget-row-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--status-critical-wash);
+  color: var(--status-critical);
+  font-weight: 600;
+}
