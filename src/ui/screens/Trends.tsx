@@ -33,7 +33,6 @@ import { EmptyState, Money } from '../shared'
 export interface TrendsScreenProps {
   months: MonthData[]
   state: AppState
-  now: Date
   selectedMonth: MonthData
   onSelectMonth?: (tab: string) => void
 }
@@ -85,18 +84,18 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
   const sorted = sortByPeriod(months)
   const selIdx = sorted.findIndex((m) => m.tab === selectedMonth.tab)
   const endIdx = selIdx >= 0 ? selIdx : sorted.length - 1
-  const window = sorted.slice(Math.max(0, endIdx - 11), endIdx + 1)
-  const windowTabs = new Set(window.map((m) => m.tab))
+  const windowMonths = sorted.slice(Math.max(0, endIdx - 11), endIdx + 1)
+  const windowTabs = new Set(windowMonths.map((m) => m.tab))
 
   // --- Panel 1: net worth / cash / card-debt chart ------------------------
-  const chartData = window.map((m) => {
+  const chartData = windowMonths.map((m) => {
     const p = monthMetrics(m)
     const nw = round2((p.cash ?? 0) + (p.savings ?? 0) - p.upcoming)
     return { tab: m.tab, nw, cash: p.cash, debt: round2(-p.upcoming) }
   })
 
   // --- Panel 2: month-by-month table --------------------------------------
-  const monthRows = window.map((m) => {
+  const monthRows = windowMonths.map((m) => {
     const p = monthMetrics(m)
     const nw = round2((p.cash ?? 0) + (p.savings ?? 0) - p.upcoming)
     const rate = p.income > 0 ? (p.saved / p.income) * 100 : null
@@ -141,7 +140,7 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
       <div className="panel2">
         <div className="panel2-head">
           <span>Net worth &amp; cash — 12 months</span>
-          <span className="panel2-meta">{window.length} months</span>
+          <span className="panel2-meta">{windowMonths.length} months</span>
         </div>
         <div style={{ display: 'flex', gap: 14, padding: '10px 14px 0', fontSize: 12 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -182,7 +181,21 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
             />
             <Tooltip
               cursor={{ stroke: palette.axis, strokeWidth: 1 }}
-              content={(props) => <ChartTooltip {...props} palette={palette} formatValue={fmtEUR} />}
+              content={(props) => (
+                // Guard against a null cash month: recharts' payload still
+                // carries a `{ value: null }` entry for a gapped Line (the
+                // Line itself correctly skips drawing it — connectNulls is
+                // false), but ChartTooltip's `Number(p.value)` would coerce
+                // that null to 0 and render a fabricated "€0.00" row. Filter
+                // it out here rather than teaching the shared ChartTooltip
+                // about a null-is-a-gap convention only this chart needs.
+                <ChartTooltip
+                  {...props}
+                  payload={props.payload?.filter((p) => p.value != null)}
+                  palette={palette}
+                  formatValue={fmtEUR}
+                />
+              )}
             />
             <Line type="monotone" dataKey="nw" name="Net worth" stroke={palette.categorical[0]} strokeWidth={2.2} dot={false} isAnimationActive={false} />
             <Line type="monotone" dataKey="cash" name="Cash" stroke={palette.deltaGood} strokeWidth={1.6} dot={false} isAnimationActive={false} />

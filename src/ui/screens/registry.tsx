@@ -201,7 +201,6 @@ const trendsComponent = lazy(async () => {
       <Trends
         months={p.months}
         state={p.appState ?? DEFAULT_STATE}
-        now={p.now}
         selectedMonth={p.selectedMonth}
         onSelectMonth={p.onSelectMonth}
       />

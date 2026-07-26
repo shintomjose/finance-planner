@@ -921,60 +921,13 @@ tbody tr:nth-child(even) {
   box-shadow: var(--shadow-card);
 }
 
-.movers-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* The three .panel2 cards (chart / month table / category table) — same
+   flex-column + gap convention as .overview-grid/.budget-grid's stacking
+   containers, just without their multi-column split (Trends.tsx, Task 9). */
+.trends-screen {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--hairline);
-}
-
-.movers-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-1);
-  border-bottom: 1px solid var(--hairline);
-  font-size: var(--text-sm);
-}
-
-.movers-name {
-  flex: 1;
-  color: var(--ink);
-}
-
-.movers-figures {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-variant-numeric: tabular-nums;
-}
-
-.movers-current {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.movers-avg {
-  font-size: var(--text-2xs);
-  color: var(--ink-muted);
-}
-
-.movers-delta {
-  min-width: 9rem;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.movers-delta[data-tone='good'] {
-  color: var(--success);
-}
-
-.movers-delta[data-tone='bad'] {
-  color: var(--danger);
+  gap: 14px;
 }
 
 tr[data-drift='true'] td {
