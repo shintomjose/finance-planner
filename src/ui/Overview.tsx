@@ -19,7 +19,7 @@ import { partitionUpcoming } from '../lib/foodHome'
 import { overviewFigures } from '../lib/overviewFigures'
 import { currentTabName, pickDisplayedMonth } from '../lib/period'
 import type { MonthData, Tx } from '../types'
-import { EmptyState, Money, Section, StatCard } from './shared'
+import { EmptyState, Money, Panel, Section, StatCard } from './shared'
 
 const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
 const fmtEUR = (v: number) => eurFmt.format(v)
@@ -82,7 +82,10 @@ export function Overview({ months, now }: { months: MonthData[]; now: Date }) {
 
   return (
     <div className="overview">
-      <Section title={cur.tab + (cur.tab !== currentTab ? ' (latest — current month tab missing)' : '')}>
+      <Section
+        className="overview-stats-section"
+        title={cur.tab + (cur.tab !== currentTab ? ' (latest — current month tab missing)' : '')}
+      >
         <div className="stat-grid">
           <StatCard
             label="Total income"
@@ -110,84 +113,107 @@ export function Overview({ months, now }: { months: MonthData[]; now: Date }) {
         </div>
       </Section>
 
-      <Section title="Income">
-        {cur.income.length === 0 && figures.carryover === 0 ? (
-          <EmptyState message="No income recorded." />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="overview-carryover-row">
-                  <td>Last Month Balance</td>
-                  <td>
-                    <Money amountEUR={cur.carryover} tabular />
-                  </td>
-                </tr>
-                <IncomeRows income={cur.income} />
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Section>
+      <div className="overview-grid">
+        <Panel title="Income" className="overview-panel-income">
+          {cur.income.length === 0 && figures.carryover === 0 ? (
+            <EmptyState message="No income recorded." />
+          ) : (
+            <div className="table-wrap">
+              <table className="table-compact">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="overview-carryover-row">
+                    <td>Last Month Balance</td>
+                    <td>
+                      <Money amountEUR={cur.carryover} tabular />
+                    </td>
+                  </tr>
+                  <IncomeRows income={cur.income} />
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
 
-      <Section title="Expenses">
-        {cur.expenses.length === 0 ? (
-          <EmptyState message="No expenses recorded." />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <ExpenseRows expenses={cur.expenses} />
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td>Total</td>
-                  <td>
-                    <Money amountEUR={recomputedExpenseTotal} tabular />
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </Section>
+        <Panel title="Expenses" className="overview-panel-expenses">
+          {cur.expenses.length === 0 ? (
+            <EmptyState message="No expenses recorded." />
+          ) : (
+            <div className="table-wrap">
+              <table className="table-compact">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <ExpenseRows expenses={cur.expenses} />
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>Total</td>
+                    <td>
+                      <Money amountEUR={recomputedExpenseTotal} tabular />
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </Panel>
 
-      <Section title="Upcoming">
-        {foodHomeRemaining != null && (
-          <div className="food-home-callout">
-            <span className="food-home-callout-label">Food budget remaining</span>
-            <Money amountEUR={foodHomeRemaining} tabular />
-          </div>
-        )}
-        {payableBills.length === 0 ? (
-          <EmptyState message="Nothing upcoming." />
-        ) : (
-          <ul className="upcoming-list">
-            {payableBills.map((u) => (
-              <li key={u.name}>
-                <span className="upcoming-name">{u.name}</span>
-                <Money amountEUR={u.toPay} tabular />
-              </li>
-            ))}
-            <li className="upcoming-total">
-              <span className="upcoming-name">Total to pay</span>
-              <Money amountEUR={billsToPayTotal} tabular />
-            </li>
-          </ul>
-        )}
-      </Section>
+        <div className="overview-side">
+          <Panel title="Upcoming">
+            {foodHomeRemaining != null && (
+              <div className="food-home-callout">
+                <span className="food-home-callout-label">Food budget remaining</span>
+                <Money amountEUR={foodHomeRemaining} tabular />
+              </div>
+            )}
+            {payableBills.length === 0 ? (
+              <EmptyState message="Nothing upcoming." />
+            ) : (
+              <ul className="upcoming-list">
+                {payableBills.map((u) => (
+                  <li key={u.name}>
+                    <span className="upcoming-name">{u.name}</span>
+                    <Money amountEUR={u.toPay} tabular />
+                  </li>
+                ))}
+                <li className="upcoming-total">
+                  <span className="upcoming-name">Total to pay</span>
+                  <Money amountEUR={billsToPayTotal} tabular />
+                </li>
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Bank accounts">
+            {cur.banks.length === 0 ? (
+              <p className="note">No bank accounts recorded.</p>
+            ) : (
+              <ul className="upcoming-list">
+                {cur.banks.map((b) => (
+                  <li key={b.name}>
+                    <span className="upcoming-name">{b.name}</span>
+                    <Money amountEUR={b.amountEUR} tabular />
+                  </li>
+                ))}
+                <li className="upcoming-total">
+                  <span className="upcoming-name">Total</span>
+                  <Money amountEUR={cur.bankTotal} tabular />
+                </li>
+              </ul>
+            )}
+          </Panel>
+        </div>
+      </div>
     </div>
   )
 }
