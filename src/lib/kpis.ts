@@ -17,7 +17,7 @@ export interface KpiCard {
   value: number | null // null → render '—'
   delta: number | null // vs previous month, same metric; null when no prev
   goodUp: boolean // is a positive delta good (colors delta text)
-  series: number[] // ≤12 trailing values ending at selected month
+  series: (number | null)[] // ≤12 trailing values ending at selected month; null preserves a gap (e.g. no bank data that month), not coerced to 0
   note: string
 }
 
@@ -153,7 +153,7 @@ export function buildKpis(months: MonthData[], selectedTab: string, opts: KpiOpt
       value: curVal,
       delta: deltaFor(curVal, prevVal),
       goodUp: spec.goodUp,
-      series: parts.map((p) => spec.value(p, opts) ?? 0),
+      series: parts.map((p) => spec.value(p, opts)),
       note: spec.note(cur, opts),
     }
   })
