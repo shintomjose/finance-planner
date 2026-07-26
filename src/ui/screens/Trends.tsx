@@ -1,51 +1,74 @@
-// Trends screen (Plan 2 Task 10): monthly income/expense, per-category
-// trend lines, year-over-year same-month deltas, top movers vs. their
-// trailing average, household vs. rest split, and carryover drift. All the
-// math lives in ../../lib/trends (+ ../../lib/carryover for drift) — this
-// component only shapes chart data and renders it. recharts (via MonthBar/
-// CategoryLine/Sparkline) is fine here since Trends is its own lazy chunk,
-// same as Budget's PacingBar chunk stays recharts-free.
-import { useMemo, useState } from 'react'
-import { computeChain } from '../../lib/carryover'
-import { MIN_MOVER_DELTA_EUR, categorySeries, householdSplit, monthlyTotals, topMovers, yoySameMonth } from '../../lib/trends'
+// Trends screen (template redesign, Task 9 rebuild — replaces the Plan 2
+// Task 10 layout entirely): a net worth/cash/card-debt line chart, a
+// month-by-month table, and a per-category sparkline trend table, all
+// windowed to the last 12 months ending at the globally selected month —
+// the SAME slice construction kpis.ts's buildKpis uses (sortByPeriod, find
+// selectedMonth's index, slice the 11 months before it plus itself), so
+// "the last 12 months" here always means the same 12 months the header/KPI
+// row above are already showing.
+//
+// Every figure is recomputed via monthMetrics() (kpis.ts, exported this
+// task for reuse) or categorize()/categorySeries() (normalize.ts/trends.ts)
+// — never a sheet cell. Carryover never enters income (repo golden rule):
+// monthMetrics().income is already overviewFigures().incomeOwn, which
+// excludes it.
+//
+// Rows/chart points are clickable and flip the App-level selectedTab (via
+// `onSelectMonth`, wired in registry.tsx/App.tsx this task) — the SAME
+// global month selection the header/KPI row read, so picking a month here
+// updates the whole app, not just this screen.
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { monthMetrics } from '../../lib/kpis'
+import { round2, sortByPeriod } from '../../lib/mathUtils'
+import { categorize } from '../../lib/normalize'
+import { categorySeries } from '../../lib/trends'
 import type { AppState } from '../../state/appState'
 import type { MonthData } from '../../types'
-import { CategoryLine } from '../charts/CategoryLine'
-import { MonthBar } from '../charts/MonthBar'
+import { ChartTooltip } from '../charts/ChartTooltip'
+import { getPalette } from '../charts/palette'
 import { Sparkline } from '../charts/Sparkline'
-import { EmptyState, Section } from '../shared'
+import { useColorScheme } from '../charts/useColorScheme'
+import { EmptyState, Money } from '../shared'
 
 export interface TrendsScreenProps {
   months: MonthData[]
   state: AppState
   now: Date
+  selectedMonth: MonthData
+  onSelectMonth?: (tab: string) => void
 }
-
-type Range = '12' | '24' | 'all'
-const RANGES: Range[] = ['12', '24', 'all']
 
 const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
 const fmtEUR = (v: number) => (Number.isFinite(v) ? eurFmt.format(v) : eurFmt.format(0))
-const fmtPct = (v: number | null) => (v == null ? '–' : `${v > 0 ? '+' : ''}${Math.round(v)}%`)
 
-function labelFor(category: string): string {
-  return category === 'other' ? 'Other' : category.charAt(0).toUpperCase() + category.slice(1)
+const MONTH_COLS = '64px 1fr 1fr 1fr 52px 1fr 1fr 1fr 120px'
+const CATEGORY_COLS = '10px 1fr 120px 92px 92px 100px'
+
+/** Largest categorize() bucket for one month's expenses (month table's "Top
+ * category" column) — 'uncategorized' is a legitimate answer, same as
+ * Overview's category panel. Returns null only for a month with zero
+ * expense rows. */
+function topCategoryFor(m: MonthData, overrides: Record<string, string>): string | null {
+  if (m.expenses.length === 0) return null
+  const totals = new Map<string, number>()
+  for (const tx of m.expenses) {
+    const cat = categorize(tx.normLabel, overrides)
+    totals.set(cat, (totals.get(cat) ?? 0) + (tx.amountEUR ?? 0))
+  }
+  let best: string | null = null
+  let bestVal = -Infinity
+  for (const [cat, val] of totals) {
+    if (val > bestVal) {
+      bestVal = val
+      best = cat
+    }
+  }
+  return best
 }
 
-function sliceRange<T>(items: T[], range: Range): T[] {
-  if (range === 'all') return items
-  return items.slice(-Number(range))
-}
-
-export function Trends({ months, state, now }: TrendsScreenProps) {
-  const [range, setRange] = useState<Range>('24')
-
-  const totals = useMemo(() => monthlyTotals(months), [months])
-  const series = useMemo(() => categorySeries(months, state.categoryOverrides, 6), [months, state.categoryOverrides])
-  const yoy = useMemo(() => yoySameMonth(months, now), [months, now])
-  const movers = useMemo(() => topMovers(months, state.categoryOverrides, 3), [months, state.categoryOverrides])
-  const household = useMemo(() => householdSplit(months), [months])
-  const drift = useMemo(() => computeChain(months), [months])
+export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsScreenProps) {
+  const palette = getPalette(useColorScheme())
+  const overrides = state.categoryOverrides
 
   if (months.length < 2) {
     return (
@@ -56,144 +79,225 @@ export function Trends({ months, state, now }: TrendsScreenProps) {
     )
   }
 
-  // The 12/24/all toggle is screen-level (reviewer finding): it windows every
-  // month-indexed section (net, category lines, household split) by the same
-  // tab set, sliced from `totals` (chronologically sorted) AFTER the sort so
-  // "last 12" always means the 12 most recent months, never input order. YoY
-  // (its own year window), top movers (its own trailing window), and
-  // carryover drift (the full chain, for auditability) intentionally stay
-  // range-independent.
-  const rangedTotals = sliceRange(totals, range)
-  const rangedTabs = new Set(rangedTotals.map((p) => p.tab))
-  const netData = rangedTotals.map((p) => ({ tab: p.tab, income: p.income, expense: p.expense }))
+  // Last 12 months ending at (not centered around, not "the sheet's latest
+  // tab") the globally selected month — browsing to an older month
+  // re-windows every section below, same as kpis.ts's buildKpis.
+  const sorted = sortByPeriod(months)
+  const selIdx = sorted.findIndex((m) => m.tab === selectedMonth.tab)
+  const endIdx = selIdx >= 0 ? selIdx : sorted.length - 1
+  const window = sorted.slice(Math.max(0, endIdx - 11), endIdx + 1)
+  const windowTabs = new Set(window.map((m) => m.tab))
 
-  const rangedSeries = series.map((s) => ({ ...s, points: s.points.filter((p) => rangedTabs.has(p.tab)) }))
-  const categoryTabs = rangedSeries[0]?.points.map((p) => p.tab) ?? []
-  const categoryData = categoryTabs.map((tab, i) => {
-    const row: Record<string, unknown> = { tab }
-    for (const s of rangedSeries) row[s.category] = s.points[i]?.value ?? 0
-    return row
+  // --- Panel 1: net worth / cash / card-debt chart ------------------------
+  const chartData = window.map((m) => {
+    const p = monthMetrics(m)
+    const nw = round2((p.cash ?? 0) + (p.savings ?? 0) - p.upcoming)
+    return { tab: m.tab, nw, cash: p.cash, debt: round2(-p.upcoming) }
   })
-  const categorySeriesDefs = rangedSeries.map((s) => ({ key: s.category, label: labelFor(s.category) }))
 
-  const yoyData = yoy.map((d) => ({ month: d.monthName, previous: d.previous ?? 0, current: d.current ?? 0 }))
-  const householdData = household
-    .filter((h) => rangedTabs.has(h.tab))
-    .map((h) => ({ tab: h.tab, household: h.household, other: h.other }))
-  const driftSpark = drift.map((d) => d.driftEUR ?? 0)
+  // --- Panel 2: month-by-month table --------------------------------------
+  const monthRows = window.map((m) => {
+    const p = monthMetrics(m)
+    const nw = round2((p.cash ?? 0) + (p.savings ?? 0) - p.upcoming)
+    const rate = p.income > 0 ? (p.saved / p.income) * 100 : null
+    return {
+      tab: m.tab,
+      income: p.income,
+      expenses: p.expenses,
+      saved: p.saved,
+      rate,
+      cash: p.cash,
+      upcoming: p.upcoming,
+      nw,
+      topCategory: topCategoryFor(m, overrides),
+    }
+  })
+
+  // --- Panel 3: category trend table ---------------------------------------
+  // topN large enough that no category ever folds into a synthetic "other"
+  // bucket — this table wants every category with window spend, ranked by
+  // its own window total, not top-N + other.
+  const allSeries = categorySeries(months, overrides, 999)
+  const categoryRows = allSeries
+    .map((s) => {
+      const windowPoints = s.points.filter((pt) => windowTabs.has(pt.tab))
+      const windowTotal = round2(windowPoints.reduce((sum, pt) => sum + pt.value, 0))
+      const fullIdx = s.points.findIndex((pt) => pt.tab === selectedMonth.tab)
+      const thisMonth = fullIdx >= 0 ? s.points[fullIdx].value : (windowPoints[windowPoints.length - 1]?.value ?? 0)
+      // 6-mo avg anchored strictly BEFORE the selected month (same
+      // "don't average future months when browsing an old month" fix as
+      // Task 8) — never include the selected month or anything after it.
+      const priorPoints = fullIdx >= 0 ? s.points.slice(0, fullIdx) : s.points.slice(0, -1)
+      const last6 = priorPoints.slice(-6)
+      const avg = last6.length > 0 ? round2(last6.reduce((sum, pt) => sum + pt.value, 0) / last6.length) : null
+      const delta = avg == null ? null : round2(thisMonth - avg)
+      return { category: s.category, sparkline: windowPoints.map((pt) => pt.value), windowTotal, thisMonth, avg, delta }
+    })
+    .filter((r) => r.windowTotal !== 0)
+    .sort((a, b) => b.windowTotal - a.windowTotal)
 
   return (
     <div className="trends-screen">
-      <Section
-        title="Monthly net"
-        actions={
-          <div className="range-toggle" role="group" aria-label="Range">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                className="range-toggle-btn"
-                data-active={range === r}
-                onClick={() => setRange(r)}
-              >
-                {r === 'all' ? 'All' : `${r}m`}
-              </button>
-            ))}
-          </div>
-        }
-      >
-        <MonthBar
-          data={netData}
-          xKey="tab"
-          series={[
-            { key: 'income', label: 'Income' },
-            { key: 'expense', label: 'Expense' },
-          ]}
-          valueFormatter={fmtEUR}
-        />
-      </Section>
-
-      <Section title="Spend by category">
-        {categorySeriesDefs.length === 0 ? (
-          <EmptyState message="No categorized expenses yet." />
-        ) : (
-          <CategoryLine data={categoryData} xKey="tab" series={categorySeriesDefs} valueFormatter={fmtEUR} />
-        )}
-      </Section>
-
-      <Section title="Year over year (same month)">
-        <MonthBar
-          data={yoyData}
-          xKey="month"
-          series={[
-            { key: 'previous', label: 'Last year' },
-            { key: 'current', label: 'This year' },
-          ]}
-          valueFormatter={fmtEUR}
-        />
-      </Section>
-
-      <Section title="Top movers">
-        {movers.length === 0 ? (
-          <EmptyState
-            message={`No category moved by more than €${MIN_MOVER_DELTA_EUR} vs. its trailing 3-month average.`}
-          />
-        ) : (
-          <ul className="movers-list">
-            {movers.map((m) => (
-              <li key={m.category} className="movers-row">
-                <span className="movers-name">{labelFor(m.category)}</span>
-                <span className="movers-figures">
-                  <span className="movers-current">{fmtEUR(m.current)}</span>
-                  <span className="movers-avg">vs {fmtEUR(m.trailingAvg)} avg</span>
-                </span>
-                <span className="movers-delta" data-tone={m.deltaEUR > 0 ? 'bad' : 'good'}>
-                  {m.deltaEUR > 0 ? '+' : ''}
-                  {fmtEUR(m.deltaEUR)} ({fmtPct(m.deltaPct)})
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section title="Household vs. rest">
-        <MonthBar
-          data={householdData}
-          xKey="tab"
-          series={[
-            { key: 'household', label: 'Household' },
-            { key: 'other', label: 'Other' },
-          ]}
-          valueFormatter={fmtEUR}
-        />
-      </Section>
-
-      <Section title="Carryover drift">
-        <Sparkline data={driftSpark} tone="accent" />
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Computed</th>
-                <th>Sheet</th>
-                <th>Drift</th>
-              </tr>
-            </thead>
-            <tbody>
-              {drift.map((d) => (
-                <tr key={d.tab} data-drift={d.driftEUR != null && d.driftEUR !== 0}>
-                  <td>{d.tab}</td>
-                  <td>{fmtEUR(d.computed)}</td>
-                  <td>{d.sheet == null ? '–' : fmtEUR(d.sheet)}</td>
-                  <td>{d.driftEUR == null ? '–' : fmtEUR(d.driftEUR)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="panel2">
+        <div className="panel2-head">
+          <span>Net worth &amp; cash — 12 months</span>
+          <span className="panel2-meta">{window.length} months</span>
         </div>
-      </Section>
+        <div style={{ display: 'flex', gap: 14, padding: '10px 14px 0', fontSize: 12 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="dot" style={{ background: palette.categorical[0] }} />
+            Net worth
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="dot" style={{ background: palette.deltaGood }} />
+            Cash
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="dot" style={{ background: palette.categorical[1] }} />
+            Card debt
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+            onClick={(e) => {
+              if (e?.activeLabel != null) onSelectMonth?.(String(e.activeLabel))
+            }}
+          >
+            <CartesianGrid stroke={palette.gridline} vertical={false} />
+            <XAxis
+              dataKey="tab"
+              stroke={palette.axis}
+              tick={{ fill: palette.textMuted, fontSize: 12 }}
+              tickLine={false}
+              axisLine={{ stroke: palette.axis }}
+            />
+            <YAxis
+              stroke={palette.axis}
+              tick={{ fill: palette.textMuted, fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              width={56}
+            />
+            <Tooltip
+              cursor={{ stroke: palette.axis, strokeWidth: 1 }}
+              content={(props) => <ChartTooltip {...props} palette={palette} formatValue={fmtEUR} />}
+            />
+            <Line type="monotone" dataKey="nw" name="Net worth" stroke={palette.categorical[0]} strokeWidth={2.2} dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="cash" name="Cash" stroke={palette.deltaGood} strokeWidth={1.6} dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="debt" name="Card debt" stroke={palette.categorical[1]} strokeWidth={1.6} dot={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="panel2">
+        <div className="panel2-head">
+          <span>Month by month</span>
+          <span className="panel2-meta">click a row to select it</span>
+        </div>
+        <div className="dg-cols" style={{ gridTemplateColumns: MONTH_COLS }}>
+          <span>Month</span>
+          <span className="right">Income</span>
+          <span className="right">Expenses</span>
+          <span className="right">Saved</span>
+          <span className="right">Rate</span>
+          <span className="right">Cash</span>
+          <span className="right">Upcoming</span>
+          <span className="right">Net worth</span>
+          <span>Top category</span>
+        </div>
+        {monthRows.map((r) => {
+          const isSelected = r.tab === selectedMonth.tab
+          const savedColor = r.saved >= 0 ? 'var(--green)' : 'var(--red)'
+          return (
+            <div
+              key={r.tab}
+              className="dg-row clickable"
+              style={{ gridTemplateColumns: MONTH_COLS, background: isSelected ? 'var(--surface-2)' : undefined }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Select ${r.tab}`}
+              onClick={() => onSelectMonth?.(r.tab)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelectMonth?.(r.tab)
+                }
+              }}
+            >
+              <span className="num">{r.tab}</span>
+              <span className="right">
+                <Money amountEUR={r.income} tabular />
+              </span>
+              <span className="right">
+                <Money amountEUR={r.expenses} tabular />
+              </span>
+              <span className="right" style={{ color: savedColor }}>
+                {r.saved >= 0 && '+'}
+                <Money amountEUR={r.saved} tabular />
+              </span>
+              <span className="right">{r.rate == null ? '—' : `${Math.round(r.rate)}%`}</span>
+              <span className="right">
+                <Money amountEUR={r.cash} tabular />
+              </span>
+              <span className="right" style={{ color: 'var(--brick)' }}>
+                <Money amountEUR={r.upcoming} tabular />
+              </span>
+              <span className="right" style={{ color: palette.categorical[0] }}>
+                <Money amountEUR={r.nw} tabular />
+              </span>
+              <span>{r.topCategory ?? '—'}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="panel2">
+        <div className="panel2-head">
+          <span>Category trend — 12 months</span>
+          <span className="panel2-meta">{categoryRows.length} categories</span>
+        </div>
+        {categoryRows.length === 0 ? (
+          <EmptyState message="No categorized expenses in this window." />
+        ) : (
+          <>
+            <div className="dg-cols" style={{ gridTemplateColumns: CATEGORY_COLS }}>
+              <span />
+              <span>Category</span>
+              <span>Trend</span>
+              <span className="right">This month</span>
+              <span className="right">6-mo avg</span>
+              <span className="right">vs avg</span>
+            </div>
+            {categoryRows.map((r, i) => {
+              const color = palette.categorical[i % 8]
+              const deltaColor = r.delta == null ? undefined : r.delta > 0 ? 'var(--red)' : r.delta < 0 ? 'var(--green)' : undefined
+              return (
+                <div className="dg-row" style={{ gridTemplateColumns: CATEGORY_COLS }} key={r.category}>
+                  <span className="dot" style={{ background: color }} />
+                  <span>{r.category}</span>
+                  <Sparkline data={r.sparkline} height={28} />
+                  <span className="right">
+                    <Money amountEUR={r.thisMonth} tabular />
+                  </span>
+                  <span className="right">{r.avg == null ? '—' : <Money amountEUR={r.avg} tabular />}</span>
+                  <span className="right" style={{ color: deltaColor }}>
+                    {r.delta == null ? (
+                      '—'
+                    ) : (
+                      <>
+                        {r.delta > 0 && '+'}
+                        <Money amountEUR={r.delta} tabular />
+                      </>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </>
+        )}
+      </div>
     </div>
   )
 }

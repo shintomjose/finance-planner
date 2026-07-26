@@ -90,6 +90,7 @@ export default function App() {
         now,
         label: SCREEN_REGISTRY[tab].label,
         selectedMonth,
+        onSelectMonth: setSelectedTab,
         plan,
         mutualFunds,
         deutscheBank,

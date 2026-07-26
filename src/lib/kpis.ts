@@ -26,7 +26,7 @@ export interface KpiOptions {
   investedEUR?: number | null
 }
 
-interface MetricParts {
+export interface MetricParts {
   income: number
   expenses: number
   saved: number
@@ -40,7 +40,11 @@ interface MetricParts {
   bankCount: number
 }
 
-function metricsOf(m: MonthData): MetricParts {
+/** Per-month figure assembly shared by `buildKpis` (this file) and the
+ * Trends screen rebuild (Task 9) — both need the same income/expenses/cash/
+ * savings/upcoming figures for a single month, so this is exported rather
+ * than kept as buildKpis' private helper (was `metricsOf`, pre-Task 9). */
+export function monthMetrics(m: MonthData): MetricParts {
   const f = overviewFigures(m)
   const { bills } = partitionUpcoming(m.upcoming)
   const upcoming = round2(bills.reduce((s, b) => s + (b.toPay ?? 0), 0))
@@ -140,7 +144,7 @@ export function buildKpis(months: MonthData[], selectedTab: string, opts: KpiOpt
   const idx = sorted.findIndex((m) => m.tab === selectedTab)
   const end = idx >= 0 ? idx : sorted.length - 1
   const window = sorted.slice(Math.max(0, end - 11), end + 1)
-  const parts = window.map(metricsOf)
+  const parts = window.map(monthMetrics)
   const cur = parts[parts.length - 1]
   const prev = parts.length > 1 ? parts[parts.length - 2] : null
 

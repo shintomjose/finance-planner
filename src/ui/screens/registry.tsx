@@ -47,13 +47,21 @@ export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' 
  * month" is meaningless (Sachin, Trips, Logs, Goals, Health) simply
  * ignore it until their own rebuild task wires it in; Overview/Budget/
  * Trends/NetWorth still run their own internal month logic until Tasks
- * 7-9 land, so this prop is transitional plumbing, not yet consumed. */
+ * 7-9 land, so this prop is transitional plumbing, not yet consumed.
+ *
+ * `onSelectMonth` (Task 9): flips the App-level `selectedTab` state (see
+ * App.tsx's `setSelectedTab`) — lets a screen's own month-row/chart-point
+ * click drive the SAME global month selection the header/KPI row read, so
+ * clicking a row on Trends updates the whole app, not just that screen.
+ * Optional so non-App.tsx callers (tests, future embeds) aren't forced to
+ * wire it just to render a screen. */
 export interface ScreenProps {
   months: MonthData[]
   issues: ParserIssue[]
   now: Date
   label: string
   selectedMonth: MonthData
+  onSelectMonth?: (tab: string) => void
   plan?: MonthlyPlanData | null
   mutualFunds?: MutualFundsData | null
   deutscheBank?: DeutscheBankData | null
@@ -189,7 +197,15 @@ const budgetComponent = lazy(async () => {
 const trendsComponent = lazy(async () => {
   const [{ Trends }, { DEFAULT_STATE }] = await Promise.all([import('./Trends'), import('../../state/appState')])
   return {
-    default: (p: ScreenProps) => <Trends months={p.months} state={p.appState ?? DEFAULT_STATE} now={p.now} />,
+    default: (p: ScreenProps) => (
+      <Trends
+        months={p.months}
+        state={p.appState ?? DEFAULT_STATE}
+        now={p.now}
+        selectedMonth={p.selectedMonth}
+        onSelectMonth={p.onSelectMonth}
+      />
+    ),
   }
 })
 
