@@ -1,13 +1,14 @@
-/* Design system (Task 8): tokens, shell layout (sidebar/bottom-nav), and
-   the chrome for shared.tsx + charts/*. Mobile-first; sidebar and bottom
-   nav share one breakpoint. Chart-surface colors mirror the dataviz
-   skill's validated palette (src/ui/charts/palette.ts) 1:1 so the app
-   chrome and the chart marks read as one system, not two.
+/* Design system (Task 8, shell rewritten Task 6): tokens, shell layout
+   (header + tab strip + month-pill row, one column, no sidebar/bottom-nav
+   — see the "Shell" section below), and the chrome for shared.tsx +
+   charts/*. Mobile-first. Chart-surface colors mirror the dataviz skill's
+   validated palette (src/ui/charts/palette.ts) 1:1 so the app chrome and
+   the chart marks read as one system, not two.
 
-   Typography: a warm serif carries the "ledger" identity — brand mark,
-   nav labels, section headings — while every number and all chart/table
-   text stays in the plain system sans (dataviz: numerals and chart text
-   are never a display face). */
+   Typography: a warm serif carries the "ledger" identity — headings,
+   section titles — while every number and all chart/table text stays in
+   the plain system sans (dataviz: numerals and chart text are never a
+   display face). */
 
 :root, :root[data-theme='dark'] {
   /* --- Color: template palette (dark, also the pre-hydration default) --- */
@@ -226,6 +227,13 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 4px;
+  /* Unconditional, not just under the mobile breakpoint: nine pills'
+     intrinsic width (~760px) already exceeds the header's available
+     width anywhere below roughly 830px, well above the 700px mobile
+     cutoff — gating this behind that media query let the PAGE itself
+     pick up a horizontal scrollbar in the ~701-830px band instead of
+     just the strip scrolling internally. */
+  overflow-x: auto;
 }
 
 .tabstrip-btn {
@@ -303,10 +311,6 @@ button {
 }
 
 @media (max-width: 700px) {
-  .tabstrip {
-    overflow-x: auto;
-  }
-
   .monthrow {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -393,6 +397,11 @@ button {
 
 .chip {
   display: inline-flex;
+  /* .shell2 is a column flex container and .chip is a direct child there
+     (Layout.tsx renders {chip} below the month row) — without this,
+     column-flex blockifies the inline-flex box and stretches it to the
+     container's full width instead of sizing to its content. */
+  align-self: flex-start;
   align-items: center;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);

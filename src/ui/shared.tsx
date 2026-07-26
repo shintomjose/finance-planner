@@ -2,11 +2,13 @@
 // formatting, stat tiles, section chrome, and empty/loading placeholders.
 // StatCard still takes a pre-rendered `trend` node so screens that only
 // need a plain stat tile never pull in recharts. KpiCardView (Task 6) is
-// the one exception: it renders its own <Sparkline> directly, because by
-// the time it exists KpiRow is already part of the eager Layout shell
-// (rendered outside the lazy screen Suspense boundary on 4 of 9 screens),
-// so recharts is in the main bundle regardless of which file does the
-// importing — there's no lazy boundary left to protect here.
+// the one exception: it renders its own <Sparkline> directly. Layout
+// imports KpiRow (which renders KpiCardView) eagerly today, so recharts
+// currently ships in the main bundle rather than a lazy screen chunk —
+// KpiRow *could* be made its own lazy import inside Layout's existing
+// screen Suspense boundary to claw that back, but Task 6 didn't do that,
+// so treat this file as no longer recharts-free until/unless a future
+// task adds that lazy boundary.
 import type { ReactNode } from 'react'
 import type { KpiCard } from '../lib/kpis'
 import { Sparkline } from './charts/Sparkline'
