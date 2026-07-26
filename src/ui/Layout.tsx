@@ -34,9 +34,8 @@ const KPI_SCREENS = new Set<ScreenId>(['overview', 'budget', 'trends', 'networth
 
 const WINDOW = 12
 
-function clampIndex(i: number, length: number): number {
-  if (length === 0) return 0
-  return Math.max(0, Math.min(length - 1, i))
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n))
 }
 
 export interface LayoutProps {
@@ -68,16 +67,22 @@ export function Layout({
   // Which 12-month slice of pills is showing — independent of which month
   // is actually selected (a user can page the window without changing the
   // selection, or select a pill then page away from it). Defaults to the
-  // window ending at the latest month.
-  const [windowEnd, setWindowEnd] = useState(() => Math.max(0, sorted.length - 1))
-  const safeEnd = clampIndex(windowEnd, sorted.length)
-  const windowStart = Math.max(0, safeEnd - (WINDOW - 1))
-  const windowMonths = sorted.slice(windowStart, safeEnd + 1)
-  const canOlder = windowStart > 0
-  const canNewer = safeEnd < sorted.length - 1
+  // window ending at the latest month. The clamped value is the window's
+  // START index (not its end) — clamping the end instead would let the
+  // window shrink below 12 pills at the oldest page whenever the total
+  // month count isn't an exact multiple of 12 (e.g. 25 months: an
+  // end-clamped oldest page would show a single pill at index 0 instead of
+  // the full 12-pill window `[0, 11]`).
+  const maxStart = Math.max(0, sorted.length - WINDOW)
+  const [windowStart, setWindowStart] = useState(() => maxStart)
+  const safeStart = clamp(windowStart, 0, maxStart)
+  const windowEnd = Math.min(sorted.length - 1, safeStart + WINDOW - 1)
+  const windowMonths = sorted.slice(safeStart, windowEnd + 1)
+  const canOlder = safeStart > 0
+  const canNewer = windowEnd < sorted.length - 1
 
-  const older = () => setWindowEnd((e) => clampIndex(clampIndex(e, sorted.length) - WINDOW, sorted.length))
-  const newer = () => setWindowEnd((e) => clampIndex(clampIndex(e, sorted.length) + WINDOW, sorted.length))
+  const older = () => setWindowStart((s) => clamp(clamp(s, 0, maxStart) - WINDOW, 0, maxStart))
+  const newer = () => setWindowStart((s) => clamp(clamp(s, 0, maxStart) + WINDOW, 0, maxStart))
 
   const figures = overviewFigures(selectedMonth)
   const saved = figures.incomeOwn - figures.expense
