@@ -21,3 +21,8 @@ it('seeds the credit card category for amex, sparkasse, advanzia', () => {
 it('the Advancia typo categorizes as credit card via the alias', () => {
   expect(categorize(normLabel('Advancia'))).toBe('credit card')
 })
+
+it('amazon cc aliases to sparkasse (owner: same card)', () => {
+  expect(normLabel('Amazon CC')).toBe('sparkasse')
+  expect(categorize(normLabel('Amazon CC'))).toBe('credit card')
+})
