@@ -136,7 +136,7 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
                   )}
                 </div>
                 <span className="networth-row-pl num" data-tone={s.plEUR == null ? 'neutral' : s.plEUR >= 0 ? 'good' : 'bad'}>
-                  {s.plEUR == null ? '–' : `${s.plEUR > 0 ? '+' : ''}${fmtEUR(s.plEUR)}`}
+                  {s.plEUR == null ? '—' : `${s.plEUR > 0 ? '+' : ''}${fmtEUR(s.plEUR)}`}
                   {s.plPct != null && <span className="networth-row-pl-pct"> ({fmtPct(s.plPct)})</span>}
                 </span>
               </div>

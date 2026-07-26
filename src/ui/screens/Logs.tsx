@@ -39,7 +39,7 @@ function PetrolPanel({ logs }: { logs: LogEntry[] }) {
         <StatCard label="Fills" value={stats.fills} />
         <StatCard label="Litres" value={`${stats.totalLitres} L`} />
         <StatCard label="Total" value={<Money amountEUR={stats.totalEUR} tabular />} />
-        <StatCard label="Avg €/L" value={stats.avgPerLitre == null ? '–' : `€${stats.avgPerLitre.toFixed(2)}`} />
+        <StatCard label="Avg €/L" value={stats.avgPerLitre == null ? '—' : `€${stats.avgPerLitre.toFixed(2)}`} />
         <StatCard
           label="Consumption"
           value={stats.consumptionL100km == null ? '–' : `${stats.consumptionL100km} L/100km`}
@@ -72,7 +72,7 @@ function PetrolPanel({ logs }: { logs: LogEntry[] }) {
                 <td>
                   <Money amountEUR={typeof e.fields.amountEUR === 'number' ? e.fields.amountEUR : null} tabular />
                 </td>
-                <td className="num">{typeof e.fields.perLitre === 'number' ? `€${e.fields.perLitre.toFixed(2)}` : '–'}</td>
+                <td className="num">{typeof e.fields.perLitre === 'number' ? `€${e.fields.perLitre.toFixed(2)}` : '—'}</td>
                 <td>{fmtNum(e.fields.km)}</td>
               </tr>
             ))}
