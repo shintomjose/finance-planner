@@ -1732,3 +1732,12 @@ tr[data-drift='true'] td {
   color: var(--danger);
   font-size: var(--text-sm);
 }
+
+/* ---------------------------------------------------------------------
+   Theme toggle (ui/theme/ThemeContext.tsx) — 3-way Light/Dark/System
+   segmented control
+   --------------------------------------------------------------------- */
+
+.theme-toggle { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.theme-toggle-btn { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 13px; line-height: 1; }
+.theme-toggle-btn.active { background: var(--accent-wash); color: var(--text); }
