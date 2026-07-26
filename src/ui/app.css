@@ -128,9 +128,6 @@
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-pill: 999px;
-
-  --sidebar-w: 15.5rem;
-  --bottomnav-h: 4.25rem;
 }
 
 * {
@@ -157,149 +154,110 @@ button {
 }
 
 /* ---------------------------------------------------------------------
-   Shell: desktop sidebar, mobile bottom nav
+   Shell (Task 6 template redesign): header (title/headline + tab strip +
+   theme toggle), a global month-pill row, and the screen body — one
+   column, no sidebar/bottom-nav. Mobile scrolls the tab strip and month
+   row horizontally instead of collapsing to icons.
    --------------------------------------------------------------------- */
 
-.shell {
-  display: flex;
-  min-height: 100vh;
-}
-
-.sidebar {
-  display: none;
-}
-
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-6) var(--space-5) var(--space-5);
-}
-
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--text-sm);
-  letter-spacing: 0.02em;
-}
-
-.brand-name {
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.sidebar-nav {
+.shell2 {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: 0 var(--space-3);
-  flex: 1;
+  gap: 14px;
+  width: 100%;
+  max-width: 88rem;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
 }
 
-.sidebar-chip {
-  padding: var(--space-4) var(--space-4) var(--space-5);
-}
-
-.topbar {
+.fp-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--hairline);
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
 }
 
-.topbar-title {
+.fp-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fp-header-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.fp-header-title h1 {
   font-family: var(--font-display);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: 600;
   margin: 0;
 }
 
-.screen {
-  width: 100%;
-  max-width: 66rem;
-  margin: 0 auto;
-  padding: var(--space-5);
-  padding-bottom: calc(var(--bottomnav-h) + var(--space-6));
+.headline {
+  color: var(--text-2);
+  font-size: var(--text-sm);
 }
 
-.bottomnav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  overflow-x: auto;
-  scrollbar-width: none;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
-  background: var(--surface);
-  border-top: 1px solid var(--hairline);
-  height: var(--bottomnav-h);
-  z-index: 20;
-}
-
-.bottomnav::-webkit-scrollbar {
-  display: none;
-}
-
-/* Shared nav-item look, laid out differently by container */
-.nav-item {
+.fp-header-right {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+.tabstrip {
+  display: flex;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.tabstrip-btn {
+  position: relative;
   border: none;
   background: none;
-  color: var(--ink-secondary);
-  font-family: var(--font-display);
+  color: var(--text-2);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: 6px;
   cursor: pointer;
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
   white-space: nowrap;
 }
 
-.sidebar-nav .nav-item {
-  width: 100%;
+.tabstrip-btn:hover {
+  color: var(--text);
 }
 
-.nav-item svg {
-  width: 1.15rem;
-  height: 1.15rem;
-  flex-shrink: 0;
-}
-
-.nav-item:hover {
-  background: var(--surface-2);
-  color: var(--ink);
-}
-
-.nav-item.active {
+.tabstrip-btn.active {
   background: var(--accent-wash);
-  color: var(--accent);
+  color: var(--text);
 }
 
-.nav-item-icon {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-
-.nav-item-badge {
-  position: absolute;
-  top: -0.35rem;
-  right: -0.5rem;
+.tabstrip-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 1rem;
+  height: 1rem;
+  margin-left: 6px;
   padding: 0 0.3rem;
   border-radius: var(--radius-pill);
   background: var(--status-critical);
@@ -307,45 +265,51 @@ button {
   font-family: var(--font-sans);
   font-size: 0.625rem;
   font-weight: 700;
-  line-height: 1.15rem;
-  text-align: center;
+  line-height: 1rem;
 }
 
-.bottomnav .nav-item {
-  flex: 0 0 auto;
-  min-width: 3.9rem;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-2);
+.monthrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.bottomnav .nav-item-label {
-  font-size: var(--text-2xs);
+.pill-nav,
+.month-pill {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-@media (min-width: 48rem) {
-  .sidebar {
-    display: flex;
-    flex-direction: column;
-    width: var(--sidebar-w);
-    flex-shrink: 0;
-    border-right: 1px solid var(--hairline);
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    overflow-y: auto;
+.pill-nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.month-pill.active {
+  background: var(--accent-wash);
+  color: var(--text);
+  border-color: var(--accent-wash);
+}
+
+.screen {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .tabstrip {
+    overflow-x: auto;
   }
 
-  .bottomnav {
-    display: none;
-  }
-
-  .screen {
-    padding: var(--space-7) var(--space-6);
-  }
-
-  .topbar {
-    padding: var(--space-5) var(--space-6);
+  .monthrow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
 }
 
@@ -435,10 +399,6 @@ button {
   background: var(--status-warning-wash);
   color: var(--ink-secondary);
   font-size: var(--text-xs);
-}
-
-.sidebar-chip .chip,
-.topbar-chip .chip {
   white-space: nowrap;
 }
 
@@ -1741,3 +1701,74 @@ tr[data-drift='true'] td {
 .theme-toggle { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
 .theme-toggle-btn { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 13px; line-height: 1; }
 .theme-toggle-btn.active { background: var(--accent-wash); color: var(--text); }
+
+/* ---------------------------------------------------------------------
+   Global KPI row (KpiRow.tsx / shared.tsx KpiCardView) — shown above the
+   active screen on Overview/Budget/Trends/NetWorth only (Layout.tsx).
+   --------------------------------------------------------------------- */
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 14px;
+}
+
+.kpi-value {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.kpi-value.tone-bad {
+  color: var(--red);
+}
+
+.kpi-delta.tone-good {
+  color: var(--green);
+}
+
+.kpi-delta.tone-bad {
+  color: var(--red);
+}
+
+.kpi-delta.tone-neutral {
+  color: var(--muted);
+}
+
+.kpi-note {
+  font-size: var(--text-2xs);
+  color: var(--faint);
+}
+
+.meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 3px;
+}

@@ -38,12 +38,22 @@ export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' 
  * `onStateChange` calling `saveState` + re-rendering with the new state. The
  * Goals screen mutates a local copy and calls `onStateChange` on every edit;
  * both stay optional on this type so non-App.tsx callers don't have to wire
- * persistence just to render a screen. */
+ * persistence just to render a screen.
+ *
+ * `selectedMonth` (Task 6, template shell): the month the global header/
+ * month-pill row is currently showing — App always supplies it (falling
+ * back to `pickDisplayedMonth` when nothing is explicitly selected), so
+ * it's required here, not optional. Screens for which "the selected
+ * month" is meaningless (Sachin, Trips, Logs, Goals, Health) simply
+ * ignore it until their own rebuild task wires it in; Overview/Budget/
+ * Trends/NetWorth still run their own internal month logic until Tasks
+ * 7-9 land, so this prop is transitional plumbing, not yet consumed. */
 export interface ScreenProps {
   months: MonthData[]
   issues: ParserIssue[]
   now: Date
   label: string
+  selectedMonth: MonthData
   plan?: MonthlyPlanData | null
   mutualFunds?: MutualFundsData | null
   deutscheBank?: DeutscheBankData | null

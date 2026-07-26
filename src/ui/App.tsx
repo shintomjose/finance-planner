@@ -33,6 +33,11 @@ const now = new Date()
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('overview')
+  // Which month tab the global header/month-pill row is showing — null
+  // until the user picks one explicitly, at which point the effective
+  // month below falls back to pickDisplayedMonth (current/latest). Not
+  // persisted (brief: "Selection = App-level state (not persisted)").
+  const [selectedTab, setSelectedTab] = useState<string | null>(null)
   const { state, retry, appState, onStateChange } = useAppData(now)
 
   if (state.kind === 'unauthenticated') return <SignIn note={state.note} />
@@ -58,12 +63,19 @@ export default function App() {
   const { months, issues, plan, mutualFunds, deutscheBank, binance, sachin, trips } = state.data
   const displayedTab = pickDisplayedMonth(months, now)!.tab
   const { bannerForDisplayedTab, otherFailedTabCount } = bannerFor(issues, displayedTab)
+  // `months` is non-empty here, and pickDisplayedMonth always returns a
+  // month for a non-empty array, so the fallback `!` is safe the same way
+  // displayedTab's is above.
+  const selectedMonth = months.find((m) => m.tab === selectedTab) ?? pickDisplayedMonth(months, now)!
 
   return (
     <Layout
       active={tab}
       onNavigate={setTab}
       issueCount={issues.length}
+      months={months}
+      selectedMonth={selectedMonth}
+      onSelectMonth={setSelectedTab}
       banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
       chip={
         otherFailedTabCount > 0 ? (
@@ -77,6 +89,7 @@ export default function App() {
         issues,
         now,
         label: SCREEN_REGISTRY[tab].label,
+        selectedMonth,
         plan,
         mutualFunds,
         deutscheBank,
