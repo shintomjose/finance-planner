@@ -24,6 +24,7 @@ import { categorize } from '../../lib/normalize'
 import { categorySeries } from '../../lib/trends'
 import type { AppState } from '../../state/appState'
 import type { MonthData } from '../../types'
+import { categoryColor } from '../charts/categoryColor'
 import { ChartTooltip } from '../charts/ChartTooltip'
 import { getPalette } from '../charts/palette'
 import { Sparkline } from '../charts/Sparkline'
@@ -88,16 +89,23 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
   const windowTabs = new Set(windowMonths.map((m) => m.tab))
 
   // --- Panel 1: net worth / cash / card-debt chart ------------------------
+  // A month with no bank data at all (p.cash == null) must NOT fabricate a
+  // net worth by treating the missing cash figure as 0 — that would render
+  // a confident-looking number built entirely from savings/upcoming while
+  // silently dropping the biggest input. null here is a genuine gap: the
+  // Line below leaves it ungraphed (connectNulls={false}) and the table
+  // renders it as Money's own dash, same as a null cash figure anywhere
+  // else in the app.
   const chartData = windowMonths.map((m) => {
     const p = monthMetrics(m)
-    const nw = round2((p.cash ?? 0) + (p.savings ?? 0) - p.upcoming)
+    const nw = p.cash == null ? null : round2(p.cash + (p.savings ?? 0) - p.upcoming)
     return { tab: m.tab, nw, cash: p.cash, debt: round2(-p.upcoming) }
   })
 
   // --- Panel 2: month-by-month table --------------------------------------
   const monthRows = windowMonths.map((m) => {
     const p = monthMetrics(m)
-    const nw = round2((p.cash ?? 0) + (p.savings ?? 0) - p.upcoming)
+    const nw = p.cash == null ? null : round2(p.cash + (p.savings ?? 0) - p.upcoming)
     const rate = p.income > 0 ? (p.saved / p.income) * 100 : null
     return {
       tab: m.tab,
@@ -197,7 +205,16 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
                 />
               )}
             />
-            <Line type="monotone" dataKey="nw" name="Net worth" stroke={palette.categorical[0]} strokeWidth={2.2} dot={false} isAnimationActive={false} />
+            <Line
+              type="monotone"
+              dataKey="nw"
+              name="Net worth"
+              stroke={palette.categorical[0]}
+              strokeWidth={2.2}
+              dot={false}
+              isAnimationActive={false}
+              connectNulls={false}
+            />
             <Line type="monotone" dataKey="cash" name="Cash" stroke={palette.deltaGood} strokeWidth={1.6} dot={false} isAnimationActive={false} />
             <Line type="monotone" dataKey="debt" name="Card debt" stroke={palette.categorical[1]} strokeWidth={1.6} dot={false} isAnimationActive={false} />
           </LineChart>
@@ -283,8 +300,8 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
               <span className="right">6-mo avg</span>
               <span className="right">vs avg</span>
             </div>
-            {categoryRows.map((r, i) => {
-              const color = palette.categorical[i % 8]
+            {categoryRows.map((r) => {
+              const color = categoryColor(r.category, palette)
               const deltaColor = r.delta == null ? undefined : r.delta > 0 ? 'var(--red)' : r.delta < 0 ? 'var(--green)' : undefined
               return (
                 <div className="dg-row" style={{ gridTemplateColumns: CATEGORY_COLS }} key={r.category}>

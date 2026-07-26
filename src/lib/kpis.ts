@@ -66,7 +66,16 @@ export function monthMetrics(m: MonthData): MetricParts {
   }
 }
 
-const fmtNum = (n: number): string => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// de-DE (not en-US) so a KPI note's inline figure (e.g. "€1.000,00 invested")
+// matches Money's own locale (shared.tsx's `eurFmt` is also
+// `Intl.NumberFormat('de-DE', …)`) — a note quoting the same number in a
+// different thousands/decimal convention than the card's own value right
+// above it read as a bug (final-review finding). The negative form needs no
+// special-casing: de-DE's own '-' sign here matches the same ASCII hyphen
+// Money's `eurFmt.format()` already produces for a negative amount, so
+// reusing this one formatter keeps both surfaces byte-identical.
+const deNumFmt = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtNum = (n: number): string => deNumFmt.format(n)
 
 function deltaFor(cur: number | null, prev: number | null): number | null {
   if (cur == null || prev == null) return null
