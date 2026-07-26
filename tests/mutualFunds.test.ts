@@ -144,11 +144,19 @@ describe('Invesco India Midcap Fund (lump 215000, W/X)', () => {
   })
 })
 
-describe('scaffold rows (rows 11-38: column A running number only, no group data)', () => {
+describe('scaffold rows (rows 11-37: column A running number only, no group data)', () => {
   it('produce zero snapshots and zero issues across the whole tail of the range', () => {
     const total = result.snapshots.length
     // 8 + 8 + 6 + 4 + 4 + 2 + 3 + 5 + 4 + 2 = 46
     expect(total).toBe(46)
+  })
+})
+
+describe('live-run correction #10: row 38 is a per-fund TOTAL row, not data (verified live 2026-07-26)', () => {
+  it('row 38 ("TOTAL" labels + summed amounts in every group column) produces zero extra snapshots and zero issues', () => {
+    expect(result.snapshots.length).toBe(46) // unchanged from the scaffold-only count above
+    expect(result.snapshots.some((s) => s.valueINR === 248000 && s.asset === 'Invesco India Midcap Fund' && s.date === null)).toBe(false)
+    expect(result.issues.find((i) => i.cell?.endsWith('38'))).toBeUndefined()
   })
 })
 

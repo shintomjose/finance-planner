@@ -22,8 +22,10 @@
 //   HDFC Small Cap Fund             S date / T value
 //   Motilal Oswal Midcap Fund       U date / V value
 //   Invesco India Midcap Fund       W date / X value                    (lump 215000)
-// Data rows 2-38. A row counts for a group only if that group's own date,
-// amount, or value cell is non-blank — column A is irrelevant to this test.
+// Data rows 2-37 (verified live 2026-07-26 — row 38 is a per-fund TOTAL row,
+// not data; see LAST_DATA_ROW below). A row counts for a group only if that
+// group's own date, amount, or value cell is non-blank — column A is
+// irrelevant to this test.
 // Summary M39:N42: N39 invested, N40 current, N41 pct change.
 import type { InvestmentSnapshot, ParserIssue } from '../types'
 import type { SpecialGrids } from '../data/specialTabs'
@@ -31,7 +33,13 @@ import { cellAt, isBlank, readDateAt, readNumberAt } from './cells'
 
 const SHEET = 'MUTUAL FUNDS'
 const FIRST_DATA_ROW = 2
-const LAST_DATA_ROW = 38
+// Live-run correction #10 (2026-07-26): row 38 is a per-fund TOTAL row on the
+// real sheet (B38 "TOTAL", sum amounts in each group's value column), not a
+// 37th scaffold row — the old bound of 38 would have misread those sums as a
+// real snapshot per fund group. Data stops at row 37; row 38 is never read
+// by the per-group loop (the aggregate is already captured separately by the
+// M39:N42 summary block below).
+const LAST_DATA_ROW = 37
 
 export interface MutualFundsData {
   snapshots: InvestmentSnapshot[]
