@@ -61,6 +61,24 @@ describe('buildKpis', () => {
     expect(k.find((c) => c.id === 'networth')!.value).toBeNull()
   })
 
+  it('cash series preserves a null gap for a month with no bank data (not coerced to 0)', () => {
+    const m1 = month('MAY_25', 2025, 5, { banks: [], bankTotal: null })
+    const m2 = month('JUN_25', 2025, 6)
+    const k = buildKpis([m1, m2], 'JUN_25')
+    const cash = k.find((c) => c.id === 'cash')!
+    expect(cash.series).toEqual([null, 230])
+    expect(cash.value).toBe(230)
+    expect(cash.delta).toBeNull() // previous month's cash is null, not 0 — delta must not be value−0
+  })
+
+  it('note fallbacks: no carryover, no savings account', () => {
+    const m = month('MAR_25', 2025, 3, { carryover: 0, banks: [{ name: 'Main', amountEUR: 200 }] })
+    const k = buildKpis([m], 'MAR_25')
+    expect(k.find((c) => c.id === 'income')!.note).toContain('no carryover')
+    expect(k.find((c) => c.id === 'savings')!.value).toBeNull()
+    expect(k.find((c) => c.id === 'savings')!.note).toContain('no savings account')
+  })
+
   it('networth includes invested when provided', () => {
     const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25', { investedEUR: 1000 })
     // cash 230 + savings 30 + 1000 − upcoming 80
