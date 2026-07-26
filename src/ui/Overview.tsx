@@ -15,9 +15,12 @@
 // payable bill (Change 2 — see SKILL.md Parser rules / workbook-map.md
 // §1.1 Upcoming row): ../lib/foodHome partitions it out of the bills list
 // into its own "Food budget remaining" callout.
+import { creditCardBills } from '../lib/creditCardBills'
 import { partitionUpcoming } from '../lib/foodHome'
 import { overviewFigures } from '../lib/overviewFigures'
 import { currentTabName, pickDisplayedMonth } from '../lib/period'
+import { DEFAULT_STATE } from '../state/appState'
+import type { AppState } from '../state/appState'
 import type { MonthData, Tx } from '../types'
 import { EmptyState, Money, Panel, Section, StatCard } from './shared'
 
@@ -69,7 +72,7 @@ function ExpenseRows({ expenses }: { expenses: Tx[] }) {
   )
 }
 
-export function Overview({ months, now }: { months: MonthData[]; now: Date }) {
+export function Overview({ months, now, appState }: { months: MonthData[]; now: Date; appState?: AppState }) {
   const currentTab = currentTabName(now)
   const cur = pickDisplayedMonth(months, now)
   if (!cur) return <EmptyState message="No data." />
@@ -79,6 +82,8 @@ export function Overview({ months, now }: { months: MonthData[]; now: Date }) {
   const { bills, foodHomeRemaining } = partitionUpcoming(cur.upcoming)
   const payableBills = bills.filter((u) => (u.toPay ?? 0) > 0)
   const billsToPayTotal = payableBills.reduce((s, u) => s + (u.toPay ?? 0), 0)
+  const overrides = (appState ?? DEFAULT_STATE).categoryOverrides
+  const { rows: cardRows, total: cardTotal } = creditCardBills(cur.expenses, overrides)
 
   return (
     <div className="overview">
@@ -208,6 +213,25 @@ export function Overview({ months, now }: { months: MonthData[]; now: Date }) {
                 <li className="upcoming-total">
                   <span className="upcoming-name">Total</span>
                   <Money amountEUR={cur.bankTotal} tabular />
+                </li>
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Credit cards">
+            {cardRows.length === 0 ? (
+              <EmptyState message="No credit card bills this month." />
+            ) : (
+              <ul className="upcoming-list">
+                {cardRows.map((r) => (
+                  <li key={r.label}>
+                    <span className="upcoming-name">{r.label}</span>
+                    <Money amountEUR={r.amountEUR} tabular />
+                  </li>
+                ))}
+                <li className="upcoming-total">
+                  <span className="upcoming-name">Total</span>
+                  <Money amountEUR={cardTotal} tabular />
                 </li>
               </ul>
             )}

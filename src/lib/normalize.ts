@@ -7,8 +7,19 @@
 // SEED_CATEGORIES is a flat map, each key can only hold one category. Per project
 // decision: `sachin` -> family, `revolut` -> income, `n26` -> family.
 
+// Owner typo aliasing: the sheet has label variants that are the SAME
+// underlying thing, just misspelled inconsistently on data-entry (owner
+// live-review confirmation, 2026-07-26: "Advanzia" / "Advancia" are one
+// credit card). Keyed/valued on the ALREADY basic-normalized (trim/collapse-
+// whitespace/lowercase) form so this is a plain post-processing map — add a
+// new typo merge here as `<misspelled-normalized>: '<canonical-normalized>'`.
+const ALIASES: Record<string, string> = {
+  advancia: 'advanzia',
+}
+
 export function normLabel(raw: string): string {
-  return raw.trim().replace(/\s+/g, ' ').toLowerCase()
+  const basic = raw.trim().replace(/\s+/g, ' ').toLowerCase()
+  return ALIASES[basic] ?? basic
 }
 
 function seedGroup(labels: string[], category: string): Record<string, string> {
@@ -100,12 +111,24 @@ const TRANSFER = [
   'Last Month Balance',
 ]
 
+// Owner's actual credit cards (live-review, 2026-07-26): Amex, Sparkasse,
+// Advanzia. Deliberately does NOT absorb 'amazon cc' / 'icici bill' from the
+// FIXED list above — owner named exactly these 3 cards, others stay put.
+// 'advanzia' here also catches the 'advancia' typo via the ALIASES map above
+// (normLabel runs before this lookup for every consumer).
+const CREDIT_CARD = [
+  'Amex',
+  'Sparkasse',
+  'Advanzia',
+]
+
 export const SEED_CATEGORIES: Record<string, string> = {
   ...seedGroup(GROCERIES, 'groceries'),
   ...seedGroup(FIXED, 'fixed'),
   ...seedGroup(LIFESTYLE, 'lifestyle'),
   ...seedGroup(INCOME, 'income'),
   ...seedGroup(TRANSFER, 'transfer'),
+  ...seedGroup(CREDIT_CARD, 'credit card'),
   // Family applied last so `sachin` (also present in the Income list) resolves to `family`.
   ...seedGroup(FAMILY, 'family'),
 }
