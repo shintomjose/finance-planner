@@ -442,24 +442,20 @@ button {
 
 .stat-card {
   background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
   padding: var(--space-4) var(--space-5);
 }
 
-.stat-card-label {
-  font-family: var(--font-display);
-  font-size: var(--text-sm);
-  color: var(--ink-secondary);
-  margin-bottom: var(--space-2);
-}
-
 .stat-card-value {
-  font-family: var(--font-sans);
+  /* No font-family/letter-spacing here — StatCard (shared.tsx) always
+     pairs this with `.num` now, which owns those two properties (mono
+     font, tabular nums, tighter tracking); duplicating/overriding them
+     here would just depend on cascade order for no reason. Body's default
+     font-family is --font-sans, so a bare `.stat-card-value` (no `.num`)
+     still falls back sanely if ever rendered without it. */
   font-size: var(--text-2xl);
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .stat-card[data-tone='good'] .stat-card-value {
@@ -545,41 +541,6 @@ button {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* ---------------------------------------------------------------------
-   Generic dashboard card (Panel component, shared.tsx) — bordered card
-   with a non-scrolling head and a body that scrolls internally once its
-   container gets a bounded height. Kept even though the rebuilt Overview
-   (Task 7) no longer uses it, since Panel/shared.tsx is out of this
-   task's file scope and other screens may still adopt it.
-   --------------------------------------------------------------------- */
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-}
-
-.panel-head {
-  flex: 0 0 auto;
-  padding: var(--space-4) var(--space-5) var(--space-3);
-  border-bottom: 1px solid var(--hairline);
-}
-
-.panel-title {
-  font-family: var(--font-display);
-  font-size: var(--text-md);
-  font-weight: 600;
-  margin: 0;
-}
-
-.panel-body {
-  padding: var(--space-4) var(--space-5);
-  overflow-y: auto;
 }
 
 /* ---------------------------------------------------------------------
@@ -1533,6 +1494,12 @@ tr[data-drift='true'] td {
 
 .panel2 { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .panel2-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 600; }
+/* Panel component's (shared.tsx) scrollable content area — Overview/
+   Budget/Trends don't need this since they lay dg-row/dg-cols/dg-foot
+   directly under panel2-head with their own per-row padding; Panel is the
+   one panel2 consumer whose body is arbitrary caller content, so it gets
+   its own padded, independently-scrolling region instead. */
+.panel2-body { padding: 12px 14px; overflow-y: auto; }
 .panel2-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); font-weight: 400; }
 .dg-cols { display: grid; align-items: center; padding: 7px 14px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--border-row); }
 .dg-row { display: grid; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border-row); }

@@ -129,9 +129,13 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
                 <span className="networth-row-label">{s.label}</span>
                 <div className="networth-row-figures">
                   <Money amountEUR={s.valueEUR} fxRate={INR_SOURCES.has(s.source) ? fxRate : undefined} tabular />
-                  {s.investedEUR != null && <span className="networth-row-invested">Invested {fmtEUR(s.investedEUR)}</span>}
+                  {s.investedEUR != null && (
+                    <span className="networth-row-invested">
+                      Invested <span className="num">{fmtEUR(s.investedEUR)}</span>
+                    </span>
+                  )}
                 </div>
-                <span className="networth-row-pl" data-tone={s.plEUR == null ? 'neutral' : s.plEUR >= 0 ? 'good' : 'bad'}>
+                <span className="networth-row-pl num" data-tone={s.plEUR == null ? 'neutral' : s.plEUR >= 0 ? 'good' : 'bad'}>
                   {s.plEUR == null ? '–' : `${s.plEUR > 0 ? '+' : ''}${fmtEUR(s.plEUR)}`}
                   {s.plPct != null && <span className="networth-row-pl-pct"> ({fmtPct(s.plPct)})</span>}
                 </span>
