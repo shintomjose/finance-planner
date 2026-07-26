@@ -5,6 +5,8 @@
 // here (PacingBar is pure CSS), so this stays a cheap lazy chunk.
 import { useMemo, useState } from 'react'
 import { budgetActuals } from '../../lib/budgetActuals'
+import { FOOD_HOME_LABEL, foodHomeRemainingFor } from '../../lib/foodHome'
+import { normLabel } from '../../lib/normalize'
 import { pickDisplayedMonth } from '../../lib/period'
 import type { MonthlyPlanData } from '../../parse/monthlyPlan'
 import type { AppState } from '../../state/appState'
@@ -39,6 +41,11 @@ export function Budget({ months, plan, state, now }: BudgetScreenProps) {
   const activeTab = selectedTab ?? defaultTab
   const selectedMonth = months.find((m) => m.tab === activeTab)
   const view = budgetActuals(selectedMonth, plan.budget, state.categoryOverrides, now, plan.budgetTotals.surplus)
+  // Change 2 (owner live-review, 2026-07-26): the "Food Home" budget row
+  // tracks a monthly food budget rather than a fixed bill — its live
+  // "remaining" figure comes straight from the selected month's Upcoming
+  // block (../../lib/foodHome), not from the categorized-actuals math above.
+  const foodHomeRemaining = foodHomeRemainingFor(selectedMonth)
 
   return (
     <div className="budget-screen">
@@ -87,6 +94,11 @@ export function Budget({ months, plan, state, now }: BudgetScreenProps) {
                   <div className="budget-row-meta">
                     <span>{fmtPct(row.pctOfBudget)} of budget · {fmtPct(row.pctOfMonth)} of month</span>
                     {row.over && <span className="budget-row-flag">Over budget</span>}
+                    {normLabel(row.category) === FOOD_HOME_LABEL && foodHomeRemaining != null && (
+                      <span className="budget-row-foodhome">
+                        Remaining this month (sheet): <Money amountEUR={foodHomeRemaining} tabular />
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

@@ -553,6 +553,63 @@ button {
 }
 
 /* ---------------------------------------------------------------------
+   Overview (Overview.tsx) — sheet-primary cards, income/expense tables,
+   upcoming bills + food-budget callout
+   --------------------------------------------------------------------- */
+
+.stat-card-drift {
+  color: var(--status-warning);
+  cursor: help;
+}
+
+.overview-carryover-row td {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.household-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: var(--space-2);
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+tfoot td {
+  font-weight: 600;
+  border-bottom: none;
+  border-top: 1px solid var(--gridline);
+  background: var(--surface-2);
+}
+
+.food-home-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--accent-wash);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.food-home-callout-label {
+  color: var(--ink-secondary);
+  font-weight: 600;
+}
+
+.upcoming-total {
+  font-weight: 600;
+}
+
+.upcoming-total .upcoming-name {
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------------
    Parser Health table
    --------------------------------------------------------------------- */
 
@@ -881,6 +938,11 @@ tbody tr:nth-child(even) {
   background: var(--status-critical-wash);
   color: var(--status-critical);
   font-weight: 600;
+}
+
+.budget-row-foodhome {
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------------
