@@ -25,15 +25,19 @@ describe('BINANCE data rows (header row 2, data rows 3+ until 2-row blank streak
     expect(result.snapshots.some((s) => s.investedEUR === 1150)).toBe(true) // row 11, right after the gap
   })
 
-  it('planted bad date at A13 -> bad-date issue, row kept with date: null, amounts intact', () => {
+  it('planted bad date at B13 -> bad-date issue, row kept with date: null, amounts intact (live-run correction #13: date moved from A to B)', () => {
     const row = result.snapshots.find((s) => s.investedEUR === 1350)
     expect(row).toEqual({
       date: null, source: 'binance', asset: 'Binance', investedEUR: 1350, valueEUR: 1200,
     })
     expect(result.issues).toContainEqual({
-      sheet: 'BINANCE', cell: 'A13', kind: 'bad-date',
+      sheet: 'BINANCE', cell: 'B13', kind: 'bad-date',
       detail: expect.stringContaining('32-13-2023'), raw: '32-13-2023',
     })
+  })
+
+  it('column A (running index) is never date-parsed — no issue for any A-column cell', () => {
+    expect(result.issues.find((i) => i.cell?.startsWith('A'))).toBeUndefined()
   })
 
   it('last row (row 17) is the 14th snapshot', () => {
@@ -60,6 +64,6 @@ describe('net/current totals from the final data row', () => {
 describe('overall issue set', () => {
   it('contains exactly the one planted bad-date — no stray drops', () => {
     const kinds = result.issues.map((i) => `${i.kind}@${i.cell}`).sort()
-    expect(kinds).toEqual(['bad-date@A13'])
+    expect(kinds).toEqual(['bad-date@B13'])
   })
 })

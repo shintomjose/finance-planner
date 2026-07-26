@@ -35,18 +35,19 @@ describe('given ledger (B2:C336, label-driven; dates col A only from ~row 122)',
   })
 })
 
-describe('repayments (F133:G189: F date, G amount, label defaulted to "Repayment")', () => {
-  it('parses 8 repayment rows', () => {
+describe('repayments (F133:G189, real layout: F=label, G=amount, no dates — live-run correction #14)', () => {
+  it('parses 8 repayment rows, every one with date: null', () => {
     expect(ledger.repayments).toHaveLength(8)
+    expect(ledger.repayments.every((r) => r.date === null)).toBe(true)
   })
 
-  it('first repayment', () => {
-    expect(ledger.repayments[0]).toEqual({ date: '2024-03-20', label: 'Repayment', amountEUR: 300, row: 133 })
+  it('first repayment uses F as the label', () => {
+    expect(ledger.repayments[0]).toEqual({ date: null, label: 'Rent installment', amountEUR: 300, row: 133 })
   })
 
-  it('planted bad-number at G135 -> bad-number issue, row kept with amountEUR: null', () => {
+  it('planted bad-number at G135 -> bad-number issue, row kept with amountEUR: null, label still read from F', () => {
     const row = ledger.repayments.find((r) => r.row === 135)
-    expect(row).toEqual({ date: '2024-03-30', label: 'Repayment', amountEUR: null, row: 135 })
+    expect(row).toEqual({ date: null, label: 'Books refund', amountEUR: null, row: 135 })
     expect(issues).toContainEqual({
       sheet: 'SACHIN', cell: 'G135', kind: 'bad-number',
       detail: expect.stringContaining('N/A'), raw: 'N/A',
@@ -81,19 +82,26 @@ describe('EMI blocks located by header label in col H (fixture offsets +2 vs map
   })
 })
 
-describe('totals (recomputed, never trusting sheet formulas directly)', () => {
-  it('given/repaid/remaining are the recomputed sums', () => {
-    expect(ledger.totals).toEqual({ given: 4400, repaid: 940, remaining: 3460 })
+describe('totals (given/repaid recomputed; remaining sheet-trusted — live-run correction #15)', () => {
+  it('given and repaid are the recomputed sums; remaining is read directly from G132', () => {
+    expect(ledger.totals).toEqual({ given: 4400, repaid: 940, remaining: 5000 })
   })
 
-  it('planted small sum-drift on G131 (sheet 4400.05 vs recomputed 4400)', () => {
+  it('planted small sum-drift on G131 (given total: sheet 4400.05 vs recomputed 4400)', () => {
     expect(issues).toContainEqual({
       sheet: 'SACHIN', cell: 'G131', kind: 'sum-drift',
       detail: expect.stringContaining('4400.05'),
     })
   })
 
-  it('G132 (remaining) matches the recompute exactly -> no sum-drift for it', () => {
+  it('planted small sum-drift on G190 (repayments total: sheet 940.05 vs recomputed 940)', () => {
+    expect(issues).toContainEqual({
+      sheet: 'SACHIN', cell: 'G190', kind: 'sum-drift',
+      detail: expect.stringContaining('940.05'),
+    })
+  })
+
+  it('G132 (remaining) is planted FAR from the given-repaid recompute (5000 vs 3460) yet emits NO sum-drift — it is trusted as-is, never cross-checked', () => {
     expect(issues.some((i) => i.cell === 'G132')).toBe(false)
   })
 })
@@ -105,8 +113,8 @@ describe('ledger name', () => {
 })
 
 describe('overall issue set', () => {
-  it('contains exactly the 3 planted issue-worthy cells — no stray drops', () => {
+  it('contains exactly the 4 planted issue-worthy cells — no stray drops', () => {
     const kinds = issues.map((i) => `${i.kind}@${i.cell}`).sort()
-    expect(kinds).toEqual(['bad-date@A6', 'bad-number@G135', 'sum-drift@G131'])
+    expect(kinds).toEqual(['bad-date@A6', 'bad-number@G135', 'sum-drift@G131', 'sum-drift@G190'])
   })
 })

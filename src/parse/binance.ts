@@ -8,22 +8,22 @@
 // leftover values (silent, same "don't trust scaffold beyond the real data"
 // principle as MUTUAL FUNDS/DEUTSCHE BANK, just with a different detector).
 //
-// Column layout (fixture-design decision — workbook-map.md §2.4 gives only
-// "running total D, spot F, P/L G", not B/C's roles):
-//   A  date
-//   B  deposit amount
-//   C  withdraw amount
+// Column layout (verified live 2026-07-26 — live-run correction #13):
+//   A  running index — pure row number, ignore entirely, NEVER date-parsed
+//      (previously misread as the date column)
+//   B  date
+//   C  combined deposit/withdraw amount (in/out net for that row) — read
+//      only so a bad cell there still produces a ParserIssue; BinanceData
+//      has no transaction-level output, only the per-row snapshot (D/F) and
+//      the final net/current totals, so C never feeds a returned value,
+//      same "read for side-effect" pattern used by monthlyPlan.ts's
+//      parseBudgetBlock for A2:A5.
 //   D  running total deposited so far (net) -> InvestmentSnapshot.investedEUR
 //   E  unused / reserved (never read, same pattern as DEUTSCHE BANK's N)
 //   F  current spot value of the holdings at that point -> valueEUR
 //   G  running P/L (F - D) — read for issue-surfacing only (a bad/#REF! cell
 //      there must still be caught), not modeled in InvestmentSnapshot since
 //      the type has no field for it and it's fully derivable from D/F.
-// B/C (deposit/withdraw) are likewise read only so a bad cell there still
-// produces a ParserIssue — BinanceData has no transaction-level output, only
-// the per-row snapshot (D/F) and the final net/current totals, so B/C never
-// feed a returned value, same "read for side-effect" pattern used by
-// monthlyPlan.ts's parseBudgetBlock for A2:A5.
 import type { InvestmentSnapshot, ParserIssue } from '../types'
 import type { SpecialGrids } from '../data/specialTabs'
 import { cellAt, isBlank, readDateAt, readNumberAt } from './cells'
@@ -31,7 +31,7 @@ import { cellAt, isBlank, readDateAt, readNumberAt } from './cells'
 const SHEET = 'BINANCE'
 const FIRST_DATA_ROW = 3
 const LAST_ROW = 30 // bound of the fetched range (BINANCE!A1:G30)
-const DATA_COLS = ['A', 'B', 'C', 'D', 'F', 'G'] // E deliberately excluded — never read at all
+const DATA_COLS = ['B', 'C', 'D', 'F', 'G'] // A (index) and E deliberately excluded — never read at all
 
 export interface BinanceData {
   snapshots: InvestmentSnapshot[]
@@ -77,9 +77,8 @@ export function parseBinance(grids: SpecialGrids): BinanceData {
     }
     blankStreak = 0
 
-    const date = readDate(values, `A${row}`, issues)
-    readNumber(values, `B${row}`, issues) // deposit — issue side-effect only
-    readNumber(values, `C${row}`, issues) // withdraw — issue side-effect only
+    const date = readDate(values, `B${row}`, issues) // A is a pure index, never date-parsed
+    readNumber(values, `C${row}`, issues) // deposit/withdraw amount — issue side-effect only
     const investedEUR = readNumber(values, `D${row}`, issues)
     const valueEUR = readNumber(values, `F${row}`, issues)
     readNumber(values, `G${row}`, issues) // P/L — issue side-effect only

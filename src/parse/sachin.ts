@@ -6,17 +6,42 @@
 //                                    cell, so no special-casing is needed to
 //                                    satisfy "date optional before row 122,
 //                                    no issue")
-//   - Totals               G131 (given), G132 (remaining) — read as sheet
-//                                    values purely for the drift check below;
-//                                    PersonLedger.totals itself is always the
-//                                    RECOMPUTED figures (same "app recomputes,
-//                                    never trusts the sheet formula" contract
-//                                    as month.ts's carryover chain, §1.3).
-//   - Repayments            F133:G189 (fixture-design decision: F=date,
-//                                    G=amount; the map gives only the
-//                                    2-column bounding range, no label
-//                                    column exists, so every repayment entry
-//                                    gets a fixed `label: 'Repayment'`)
+//   - Totals               G131 (given) is drift-checked against the
+//                                    recomputed `given` — same "app
+//                                    recomputes, never trusts the sheet
+//                                    formula" contract as month.ts's
+//                                    carryover chain (§1.3). G132 (remaining)
+//                                    is the ONE deliberate exception to that
+//                                    contract (live-run correction #15,
+//                                    2026-07-26): the sheet's own G132
+//                                    formula cross-references
+//                                    INDIA_2023!I19, data this parser has no
+//                                    access to, so a naive given-minus-repaid
+//                                    recompute against it produces a large,
+//                                    meaningless "drift". `remaining` is
+//                                    read directly from G132 instead (falling
+//                                    back to the given-repaid recompute only
+//                                    if G132 itself is unreadable), and no
+//                                    sum-drift issue is ever emitted for it.
+//                                    A second drift check, of the same shape
+//                                    as G131's, runs against G190 — the
+//                                    sheet's own repayments-total cell,
+//                                    immediately below the F133:G189 range,
+//                                    matching the data+footer-total pattern
+//                                    every other block in this codebase uses
+//                                    (SBI, petrol, alcohol, mutual funds,
+//                                    deutsche bank). NOTE: no explicit cell
+//                                    reference for a "repayments total" was
+//                                    given in the live-run brief — G190 is an
+//                                    inference from that pattern, flagged as
+//                                    unverified in the live-run-fixes report.
+//   - Repayments            F133:G189, real layout (live-run correction #14,
+//                                    2026-07-26): F=LABEL (no dates in this
+//                                    block at all), G=amountEUR. `date` is
+//                                    always null; `label` falls back to the
+//                                    fixed string 'Repayment' only on the
+//                                    (should-never-happen) case where F
+//                                    itself is blank on an amount-bearing row.
 //   - EMI trackers          H/I/J, located by scanning col H for one of the
 //                                    four known header labels (never by the
 //                                    map's fixed rows) — each block's
@@ -38,6 +63,7 @@ const GIVEN_TOTAL_ROW = 131
 const REMAINING_ROW = 132
 const REPAY_FIRST_ROW = 133
 const REPAY_LAST_ROW = 189
+const REPAY_TOTAL_ROW = 190 // inferred footer row — see header comment above
 const EMI_SCAN_LAST_ROW = 340
 
 const EMI_NAMES = ['iPhone-13', 'iPhone 14', 'Fridge', 'Washing Machine']
@@ -73,19 +99,22 @@ function parseGiven(values: (string | number | null)[][], issues: ParserIssue[])
   return out
 }
 
-/** Repayments F133:G189: row counts when G (amount) holds a real value
- * (including a bad/error cell, which still counts as "present" — same
+/** Repayments F133:G189, real layout (live-run correction #14, 2026-07-26):
+ * F is a LABEL, not a date — this block has no dates at all, `date` is
+ * always null. Row counts when G (amount) holds a real value (including a
+ * bad/error cell, which still counts as "present" — same
  * "unparseable-but-present is never silently dropped" contract as every
- * other parser). No label column exists in this block, so every entry gets
- * a fixed label (fixture-design decision, documented above). */
+ * other parser). `label` falls back to 'Repayment' only if F is itself
+ * blank on an amount-bearing row. */
 function parseRepayments(values: (string | number | null)[][], issues: ParserIssue[]): PersonLedger['repayments'] {
   const out: PersonLedger['repayments'] = []
   for (let row = REPAY_FIRST_ROW; row <= REPAY_LAST_ROW; row++) {
     const amountRaw = cellAt(values, `G${row}`)
     if (isBlank(amountRaw)) continue
-    const date = readDate(values, `F${row}`, issues)
+    const labelRaw = cellAt(values, `F${row}`)
+    const label = isBlank(labelRaw) ? 'Repayment' : String(labelRaw).trim()
     const amountEUR = readNumber(values, `G${row}`, issues)
-    out.push({ date, label: 'Repayment', amountEUR, row })
+    out.push({ date: null, label, amountEUR, row })
   }
   return out
 }
@@ -137,7 +166,6 @@ export function parseSachin(grids: SpecialGrids): SachinData {
 
   const given = entries.reduce((sum, e) => sum + (e.amountEUR ?? 0), 0)
   const repaid = repayments.reduce((sum, r) => sum + (r.amountEUR ?? 0), 0)
-  const remaining = given - repaid
 
   const sheetGiven = readNumber(values, `G${GIVEN_TOTAL_ROW}`, issues)
   if (sheetGiven !== null && Math.abs(sheetGiven - given) > 0.01) {
@@ -147,13 +175,22 @@ export function parseSachin(grids: SpecialGrids): SachinData {
     })
   }
 
-  const sheetRemaining = readNumber(values, `G${REMAINING_ROW}`, issues)
-  if (sheetRemaining !== null && Math.abs(sheetRemaining - remaining) > 0.01) {
+  const sheetRepaidTotal = readNumber(values, `G${REPAY_TOTAL_ROW}`, issues)
+  if (sheetRepaidTotal !== null && Math.abs(sheetRepaidTotal - repaid) > 0.01) {
     issues.push({
-      sheet: SHEET, cell: `G${REMAINING_ROW}`, kind: 'sum-drift',
-      detail: `remaining: sheet ${sheetRemaining} at G${REMAINING_ROW} vs recomputed ${remaining} (diff ${(sheetRemaining - remaining).toFixed(2)})`,
+      sheet: SHEET, cell: `G${REPAY_TOTAL_ROW}`, kind: 'sum-drift',
+      detail: `repayments total: sheet ${sheetRepaidTotal} at G${REPAY_TOTAL_ROW} vs recomputed ${repaid} (diff ${(sheetRepaidTotal - repaid).toFixed(2)})`,
     })
   }
+
+  // Live-run correction #15 (2026-07-26): G132's own sheet formula
+  // cross-references INDIA_2023!I19 — data this parser never fetches — so
+  // comparing it against a naive given-minus-repaid recompute produces a
+  // large, meaningless "drift". Trust the sheet's figure directly instead
+  // (no drift issue is ever emitted for it); fall back to the recompute
+  // only if G132 itself is unreadable.
+  const sheetRemaining = readNumber(values, `G${REMAINING_ROW}`, issues)
+  const remaining = sheetRemaining ?? (given - repaid)
 
   const ledger: PersonLedger = {
     name: 'Sachin',
