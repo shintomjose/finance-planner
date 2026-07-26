@@ -1,8 +1,10 @@
-// MONTHLY_PLAN special-tab parser (workbook-map.md §2.1, plan2-task-3-brief).
+// MONTHLY_PLAN special-tab parser (workbook-map.md §2.1, plan2-task-3-brief;
+// remapped 2026-07-26 against the real live sheet — see
+// .superpowers/sdd/live-run-fixes-report.md for the full corrections list).
 // ~13 fixed-position blocks (this tab, unlike month-ledger tabs, never varies
 // row/col position across eras — a single live tab, hardcoded coordinates are
 // the correct approach, same trade-off as month.ts's INCOME_LAST_ROW etc).
-// Binance copy (A65:C95) is deliberately never read — BINANCE tab is the
+// Binance copy (A65:C95) is deliberately never read — BINANCE is the
 // source of truth (workbook-map.md §2.1/§2.4) — no cell in that range is
 // touched by any block function below.
 import type { Budget, InvestmentSnapshot, LogEntry, ParserIssue } from '../types'
@@ -14,7 +16,15 @@ const SHEET = 'MONTHLY_PLAN'
 export interface MonthlyPlanData {
   budget: Budget[]
   budgetTotals: { income: number | null; expense: number | null; surplus: number | null }
-  loan: { principal: number | null; installments: { n: number; amountEUR: number | null }[]; paidToDate: number | null }
+  loan: {
+    principal: number | null
+    termMonths: number | null
+    interestEUR: number | null
+    totalEUR: number | null
+    monthlyEUR: number | null
+    installments: { n: number; amountEUR: number | null }[]
+    paidToDate: number | null
+  }
   savingsSnapshots: { label: string; amountEUR: number | null }[]
   projection: { ratePct: number | null; yearlyContribution: number | null; rows: { year: number | null; valueEUR: number | null }[] }
   sbiLife: { date: string | null; amountINR: number | null }[]
@@ -44,6 +54,25 @@ const isTotalFooterString = (v: unknown): v is string =>
 /** Thin wrapper binding this file's SHEET constant into cells.ts's shared readNumberAt. */
 function readNumber(values: (string | number | null)[][], ref: string, issues: ParserIssue[]): number | null {
   return readNumberAt(values, ref, SHEET, issues)
+}
+
+/**
+ * Reads a cell expected to hold a number, but silently (never issues) when
+ * the raw value is a plain non-error string — used inside the projection
+ * block (correction #3, live-run 2026-07-26) where header/label text (e.g.
+ * "€ SAVINGS") can land in a cell this parser would otherwise read as a
+ * number. A genuine '#REF!'/error string is still surfaced (it's real bad
+ * data, not a mis-scoped header), same as readNumber elsewhere.
+ */
+function readNumberOrSkip(values: (string | number | null)[][], ref: string, issues: ParserIssue[]): number | null {
+  const raw = cell(values, ref)
+  if (isBlank(raw)) return null
+  if (typeof raw === 'number') return raw
+  if (isErrorString(raw)) {
+    issues.push({ sheet: SHEET, cell: ref, kind: 'ref-error', detail: `error value "${raw}" at ${ref}`, raw })
+    return null
+  }
+  return null // plain string (e.g. a header/label) -> silent skip, no issue
 }
 
 // `blank` distinguishes a truly-empty anchor cell from every other
@@ -113,6 +142,13 @@ function readDate(values: (string | number | null)[][], ref: string, issues: Par
  * per-line income breakdown is modeled; only the A26 total feeds
  * `budgetTotals.income`. C27 = expense total, D2 = surplus (a standalone
  * summary cell, same pattern as month.ts's F1:G9 corner box).
+ *
+ * Live-run correction #1 (2026-07-26): a labeled row with a genuinely BLANK
+ * amount cell is planned-semantics (like a blank month-ledger expense
+ * amount) — it's still a real budget category, just with no figure entered
+ * yet. It's now INCLUDED with `plannedMonthly: null` and no issue. A
+ * non-blank but unparseable amount (bad-number/#REF!) is unchanged: readNumber
+ * already records the issue, and that row is excluded from budget[].
  */
 function parseBudgetBlock(
   values: (string | number | null)[][], issues: ParserIssue[]
@@ -125,17 +161,9 @@ function parseBudgetBlock(
     const amountRef = `C${row}`
     const amountRaw = cell(values, amountRef)
     const amount = readNumber(values, amountRef, issues)
-    if (amount === null) {
-      // readNumber already issued for error/bad-number; a genuinely blank
-      // amount on a labeled budget row still can't populate a non-nullable
-      // Budget.plannedMonthly, so it needs its own issue (never a silent drop).
-      if (isBlank(amountRaw)) {
-        issues.push({
-          sheet: SHEET, cell: amountRef, kind: 'bad-number',
-          detail: `budget category "${category}" at ${amountRef} has no amount — excluded from budget[]`,
-          raw: amountRaw,
-        })
-      }
+    if (amount === null && !isBlank(amountRaw)) {
+      // Non-blank but unparseable — readNumber already issued (bad-number/
+      // ref-error); exclude the row, same as before this correction.
       continue
     }
     budget.push({ category, plannedMonthly: amount })
@@ -149,23 +177,57 @@ function parseBudgetBlock(
   return { budget, budgetTotals: { income, expense, surplus } }
 }
 
-/** Commerzbank loan block (I1:J45): J1 principal, 36 installments I2:J37
- * (I = installment number, J = amount), J45 paid-to-date. */
+/** Known label -> loan-field mapping for the I2:I6 label rows (correction #2,
+ * live-run 2026-07-26). Matched case-insensitively, trimmed. */
+const LOAN_LABELS: Record<string, keyof Pick<MonthlyPlanData['loan'], 'principal' | 'termMonths' | 'interestEUR' | 'totalEUR' | 'monthlyEUR'>> = {
+  amount: 'principal',
+  term: 'termMonths',
+  interest: 'interestEUR',
+  total: 'totalEUR',
+  monthly: 'monthlyEUR',
+}
+
+/**
+ * Commerzbank loan block, real layout (correction #2, live-run 2026-07-26):
+ * I2:I6 are LABELS (AMOUNT/TERM/INTEREST/TOTAL/MONTHLY, case-insensitive)
+ * with their values in J2:J6 — matched by label text, not fixed field
+ * order. Installment rows 7-44: a row counts only when I holds a plain
+ * NUMBER *and* J holds a plain NUMBER; any string in either cell across
+ * that range is a silent skip (no bad-number issue — the live sheet's
+ * installment area sometimes carries stray text, e.g. "N/A"/"TBD", which
+ * isn't malformed data so much as a not-yet-scheduled row). J45 = paid to
+ * date, unchanged position.
+ */
 function parseLoanBlock(values: (string | number | null)[][], issues: ParserIssue[]): MonthlyPlanData['loan'] {
-  const principal = readNumber(values, 'J1', issues)
+  let principal: number | null = null
+  let termMonths: number | null = null
+  let interestEUR: number | null = null
+  let totalEUR: number | null = null
+  let monthlyEUR: number | null = null
+
+  for (let row = 2; row <= 6; row++) {
+    const labelRaw = cell(values, `I${row}`)
+    if (typeof labelRaw !== 'string') continue
+    const field = LOAN_LABELS[labelRaw.trim().toLowerCase()]
+    if (!field) continue
+    const value = readNumber(values, `J${row}`, issues)
+    if (field === 'principal') principal = value
+    else if (field === 'termMonths') termMonths = value
+    else if (field === 'interestEUR') interestEUR = value
+    else if (field === 'totalEUR') totalEUR = value
+    else if (field === 'monthlyEUR') monthlyEUR = value
+  }
+
   const installments: { n: number; amountEUR: number | null }[] = []
-  for (let row = 2; row <= 37; row++) {
+  for (let row = 7; row <= 44; row++) {
     const nRaw = cell(values, `I${row}`)
-    if (isBlank(nRaw)) continue
-    if (typeof nRaw !== 'number') {
-      issues.push({ sheet: SHEET, cell: `I${row}`, kind: 'bad-number', detail: `non-numeric installment index "${nRaw}" at I${row}`, raw: nRaw })
-      continue
-    }
-    const amountEUR = readNumber(values, `J${row}`, issues)
-    installments.push({ n: nRaw, amountEUR })
+    if (typeof nRaw !== 'number') continue // string/blank -> silent skip, no issue
+    const jRaw = cell(values, `J${row}`)
+    if (typeof jRaw !== 'number') continue // string/blank -> silent skip, no issue
+    installments.push({ n: nRaw, amountEUR: jRaw })
   }
   const paidToDate = readNumber(values, 'J45', issues)
-  return { principal, installments, paidToDate }
+  return { principal, termMonths, interestEUR, totalEUR, monthlyEUR, installments, paidToDate }
 }
 
 /** Savings snapshots block (K1:N7): K label / L amount, rows 2-7. */
@@ -181,73 +243,110 @@ function parseSavingsBlock(values: (string | number | null)[][], issues: ParserI
   return out
 }
 
-/** 2035 projection block (K11:R26). Fixture-design layout: K11/L11 rate %,
- * K12/L12 yearly contribution, K13/L13 header row, K14:L26 year/value rows. */
+/**
+ * 2035 projection block (K11:R26). Fixture-design layout: K11/L11 rate %,
+ * K12/L12 yearly contribution, K13/L13 header row, K14:L26 year/value rows.
+ *
+ * Live-run correction #3 (2026-07-26): the live sheet mixes header/label
+ * text into cells this parser reads as numbers (e.g. "€ SAVINGS" at L12,
+ * confirmed live) — any such plain string is now a silent skip (no
+ * bad-number issue), via `readNumberOrSkip`. Numbers-only extraction is
+ * otherwise unchanged: a genuine '#REF!'/error string still surfaces.
+ */
 function parseProjectionBlock(values: (string | number | null)[][], issues: ParserIssue[]): MonthlyPlanData['projection'] {
-  const ratePct = readNumber(values, 'L11', issues)
-  const yearlyContribution = readNumber(values, 'L12', issues)
+  const ratePct = readNumberOrSkip(values, 'L11', issues)
+  const yearlyContribution = readNumberOrSkip(values, 'L12', issues)
   const rows: { year: number | null; valueEUR: number | null }[] = []
   for (let row = 14; row <= 26; row++) {
     const yearRef = `K${row}`
     const yearRaw = cell(values, yearRef)
     if (isBlank(yearRaw)) continue
-    let year: number | null
-    if (typeof yearRaw === 'number') {
-      year = yearRaw
-    } else {
-      issues.push({ sheet: SHEET, cell: yearRef, kind: 'bad-number', detail: `non-numeric year "${yearRaw}" at ${yearRef}`, raw: yearRaw })
-      year = null
-    }
-    const valueEUR = readNumber(values, `L${row}`, issues)
+    const year = readNumberOrSkip(values, yearRef, issues)
+    const valueEUR = readNumberOrSkip(values, `L${row}`, issues)
     rows.push({ year, valueEUR })
   }
   return { ratePct, yearlyContribution, rows }
 }
 
-/** SBI Life schedule block (A29:D63): A date, B amount, rows 30-60 (31 semiannual entries). */
+/**
+ * SBI Life schedule block, real layout (correction #4, live-run 2026-07-26):
+ * row 29 is a header/title row; A30+ is a pre-numbered running index
+ * (1..31, a plain NUMBER) that is never date-parsed — it's ignored
+ * entirely. B = date, C = amount, D unused. Row inclusion is keyed off B
+ * (the date cell), same convention as every other date-driven block scan
+ * in this file. Bound stays 30-60 (31 entries), so a "Total" footer
+ * anywhere beyond row 60 (e.g. row 62 on the live sheet) is never reached.
+ */
 function parseSbiBlock(values: (string | number | null)[][], issues: ParserIssue[]): MonthlyPlanData['sbiLife'] {
   const out: MonthlyPlanData['sbiLife'] = []
   for (let row = 30; row <= 60; row++) {
-    const dateRaw = cell(values, `A${row}`)
+    const dateRaw = cell(values, `B${row}`)
     if (isBlank(dateRaw)) continue
-    const date = readDate(values, `A${row}`, issues)
-    const amountINR = readNumber(values, `B${row}`, issues)
+    const date = readDate(values, `B${row}`, issues)
+    const amountINR = readNumber(values, `C${row}`, issues)
     out.push({ date, amountINR })
   }
   return out
 }
 
-/** Badminton gear (EUR) block, full bounding box F30:G64: F date, G amount,
- * data rows 31-64 (row 30 is the header). */
+/**
+ * Badminton gear (EUR) block, real layout (correction #5, live-run
+ * 2026-07-26): F = item LABEL (no dates in this block at all), G =
+ * amountEUR. Row 30 is the header. A text-concat footer string ("Total"
+ * + digit) in either column is a silent skip, same convention as every
+ * other log block's footer handling.
+ */
 function parseGearEURBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
   for (let row = 31; row <= 64; row++) {
-    const r = resolveLogRow(values, issues, `F${row}`, `G${row}`)
-    if (!r.include) continue
-    out.push({ log: 'gear', date: r.date, fields: { amountEUR: r.amount } })
+    const labelRaw = cell(values, `F${row}`)
+    const amountRaw = cell(values, `G${row}`)
+    if (isTotalFooterString(labelRaw) || isTotalFooterString(amountRaw)) continue
+    if (isBlank(labelRaw)) continue
+    const label = String(labelRaw).trim()
+    const amountEUR = readNumber(values, `G${row}`, issues)
+    out.push({ log: 'gear', date: null, fields: { label, amountEUR } })
   }
   return out
 }
 
-/** Badminton gear (INR) block, full bounding box L50:N62: L date, M item,
- * N amount, data rows 51-62 (row 50 is the header). */
+/**
+ * Badminton gear (INR) block, real layout (correction #6, live-run
+ * 2026-07-26): L = item label, N = amountINR, no dates. M is an OPTIONAL
+ * numeric quantity — captured as field `qty` only when M is a plain
+ * number; any other M value (string, blank) is ignored silently (no
+ * issue, no field). Row 50 is the header.
+ */
 function parseGearINRBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
   for (let row = 51; row <= 62; row++) {
-    const r = resolveLogRow(values, issues, `L${row}`, `N${row}`)
-    if (!r.include) continue
-    const itemRaw = cell(values, `M${row}`)
-    const item = isBlank(itemRaw) ? null : String(itemRaw).trim()
-    out.push({ log: 'gear', date: r.date, fields: { amountINR: r.amount, item } })
+    const labelRaw = cell(values, `L${row}`)
+    if (isBlank(labelRaw)) continue
+    const label = String(labelRaw).trim()
+    const amountINR = readNumber(values, `N${row}`, issues)
+    const qtyRaw = cell(values, `M${row}`)
+    const fields: LogEntry['fields'] = { label, amountINR }
+    if (typeof qtyRaw === 'number') fields.qty = qtyRaw
+    out.push({ log: 'gear', date: null, fields })
   }
   return out
 }
+
+/** Footer label rows for the gym log (correction #7, live-run 2026-07-26):
+ * H73 "TOTAL" / H74 "AVG € PER DAY" on the live sheet — any string H cell
+ * matching /total|avg/i is a footer, silently skipped (never reaches
+ * resolveLogRow, so it can't be mistaken for a bad-date). Any OTHER
+ * unparseable H string still falls through to resolveLogRow -> readDate,
+ * i.e. it still becomes a 'bad-date' issue, unchanged. */
+const isGymFooterLabel = (v: unknown): v is string => typeof v === 'string' && /total|avg/i.test(v)
 
 /** Gym log block, full bounding box H48:J74: H date, I amount, data rows
  * 49-74 (row 48 is the header). */
 function parseGymBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
   for (let row = 49; row <= 74; row++) {
+    const hRaw = cell(values, `H${row}`)
+    if (isGymFooterLabel(hRaw)) continue
     const r = resolveLogRow(values, issues, `H${row}`, `I${row}`)
     if (!r.include) continue
     out.push({ log: 'gym', date: r.date, fields: { amountEUR: r.amount } })
@@ -255,33 +354,47 @@ function parseGymBlock(values: (string | number | null)[][], issues: ParserIssue
   return out
 }
 
-/** Petrol log block, full bounding box F81:K153: F date, G litres, H amount
- * (anchor), I per-litre, J km (often blank), data rows 82-152 (row 81 is the
- * header). */
+/**
+ * Petrol log block, real layout (correction #8, live-run 2026-07-26): row
+ * 81 is the title, row 82 is the header row (DATE/LITRE/AMOUNT/PER LITRE
+ * at G82:J82) — neither is read. F is a running index, ignored entirely.
+ * Data rows 83-152: G date, H litres, I amount (anchor), J per-litre, K
+ * km (often blank). G153 is a "Total" footer — matched by string content
+ * and skipped before any date-parsing is attempted (so it never becomes a
+ * bad-date issue).
+ */
 function parsePetrolBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 82; row <= 153; row++) {
-    const r = resolveLogRow(values, issues, `F${row}`, `H${row}`)
+  for (let row = 83; row <= 153; row++) {
+    const dateRaw = cell(values, `G${row}`)
+    if (typeof dateRaw === 'string' && /total/i.test(dateRaw)) continue // footer row, silent skip
+    const r = resolveLogRow(values, issues, `G${row}`, `I${row}`)
     if (!r.include) continue
-    const litres = readNumber(values, `G${row}`, issues)
-    const perLitre = readNumber(values, `I${row}`, issues)
-    const km = readNumber(values, `J${row}`, issues)
+    const litres = readNumber(values, `H${row}`, issues)
+    const perLitre = readNumber(values, `J${row}`, issues)
+    const km = readNumber(values, `K${row}`, issues)
     out.push({ log: 'petrol', date: r.date, fields: { litres, amountEUR: r.amount, perLitre, km } })
   }
   return out
 }
 
-/** Alcohol log block (A126:C161, already the full bounding box): A
- * pre-numbered scaffold running number (present on every templated row —
- * not data on its own), B date, C amount (anchor). A row only counts once C
- * holds a real value, OR B holds a date with C still blank (planned/not-yet
- * logged) — pure scaffold-only rows (blank B/C) are skipped silently. */
+/**
+ * Alcohol log block, real layout (correction #9, live-run 2026-07-26): row
+ * 126 is the header (B "Item", C "Amount") — skipped, data starts row
+ * 127. A is a pre-numbered running index (ignored entirely, not a
+ * signal). B = label, C = amountEUR, no dates. Row inclusion is keyed off
+ * B (the label cell) — pure-scaffold rows (A filled, B/C blank) are
+ * skipped silently.
+ */
 function parseAlcoholBlock(values: (string | number | null)[][], issues: ParserIssue[]): LogEntry[] {
   const out: LogEntry[] = []
-  for (let row = 126; row <= 161; row++) {
-    const r = resolveLogRow(values, issues, `B${row}`, `C${row}`)
-    if (!r.include) continue
-    out.push({ log: 'alcohol', date: r.date, fields: { amountEUR: r.amount } })
+  for (let row = 127; row <= 161; row++) {
+    const labelRaw = cell(values, `B${row}`)
+    if (isBlank(labelRaw)) continue
+    if (isTotalFooterString(labelRaw)) continue
+    const label = String(labelRaw).trim()
+    const amountEUR = readNumber(values, `C${row}`, issues)
+    out.push({ log: 'alcohol', date: null, fields: { label, amountEUR } })
   }
   return out
 }

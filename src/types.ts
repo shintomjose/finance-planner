@@ -37,7 +37,10 @@ export interface MonthData {
 
 // Plan 2 domain types (Task 2 brief) — produced by the special-tab parsers
 // (Tasks 3–6), not wired into any parser/UI yet.
-export interface Budget { category: string; plannedMonthly: number }
+// plannedMonthly is nullable: a labeled MONTHLY_PLAN budget row with a blank
+// amount cell is planned-semantics (category exists, no figure entered yet;
+// live-run correction #1, 2026-07-26) — not excluded, not zero.
+export interface Budget { category: string; plannedMonthly: number | null }
 
 export interface InvestmentSnapshot {
   date: string | null

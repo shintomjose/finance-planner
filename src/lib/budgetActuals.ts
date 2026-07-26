@@ -58,7 +58,7 @@ function pctOfMonthElapsed(period: MonthData['period'], now: Date): number {
 }
 
 function sumPlanned(budget: Budget[]): number {
-  return round2(budget.reduce((sum, b) => sum + b.plannedMonthly, 0))
+  return round2(budget.reduce((sum, b) => sum + (b.plannedMonthly ?? 0), 0))
 }
 
 /** Builds the empty-month view: every budget row present with zero actual,
@@ -69,7 +69,7 @@ function emptyView(budget: Budget[], plannedSurplus: number | null): BudgetView 
   const planned = sumPlanned(budget)
   return {
     rows: budget.map((b) => ({
-      category: b.category, plannedMonthly: b.plannedMonthly, actual: 0, pctOfBudget: 0, pctOfMonth: 0, over: false,
+      category: b.category, plannedMonthly: b.plannedMonthly ?? 0, actual: 0, pctOfBudget: 0, pctOfMonth: 0, over: false,
     })),
     unbudgeted: [],
     totals: { planned, actual: 0, surplus: planned, plannedSurplus },
@@ -118,8 +118,9 @@ export function budgetActuals(
     const key = normLabel(b.category)
     if (byBucket.has(key)) matchedBuckets.add(key)
     const actual = round2((tier1ByKey.get(key) ?? 0) + (byBucket.get(key) ?? 0))
-    const pctOfBudget = b.plannedMonthly > 0 ? round2((actual / b.plannedMonthly) * 100) : actual > 0 ? Infinity : 0
-    return { category: b.category, plannedMonthly: b.plannedMonthly, actual, pctOfBudget, pctOfMonth, over: pctOfBudget > 100 }
+    const planned = b.plannedMonthly ?? 0
+    const pctOfBudget = planned > 0 ? round2((actual / planned) * 100) : actual > 0 ? Infinity : 0
+    return { category: b.category, plannedMonthly: planned, actual, pctOfBudget, pctOfMonth, over: pctOfBudget > 100 }
   })
 
   const unbudgeted = [...byBucket.entries()]
