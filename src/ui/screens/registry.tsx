@@ -175,7 +175,13 @@ const budgetComponent = lazy(async () => {
   const [{ Budget }, { DEFAULT_STATE }] = await Promise.all([import('./Budget'), import('../../state/appState')])
   return {
     default: (p: ScreenProps) => (
-      <Budget months={p.months} plan={p.plan ?? null} state={p.appState ?? DEFAULT_STATE} now={p.now} />
+      <Budget
+        months={p.months}
+        plan={p.plan ?? null}
+        state={p.appState ?? DEFAULT_STATE}
+        now={p.now}
+        selectedMonth={p.selectedMonth}
+      />
     ),
   }
 })

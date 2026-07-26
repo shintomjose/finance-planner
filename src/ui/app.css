@@ -498,29 +498,6 @@ button {
   color: var(--ink-muted);
 }
 
-.upcoming-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--hairline);
-}
-
-.upcoming-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-1);
-  border-bottom: 1px solid var(--hairline);
-  font-size: var(--text-sm);
-}
-
-.upcoming-name {
-  color: var(--ink-secondary);
-}
-
 /* ---------------------------------------------------------------------
    Empty / loading states
    --------------------------------------------------------------------- */
@@ -898,47 +875,16 @@ tbody tr:nth-child(even) {
 }
 
 /* ---------------------------------------------------------------------
-   Budget vs Actual (screens/Budget.tsx)
+   .budget-rows (screens/Sachin.tsx EMI list) — Budget.tsx itself moved to
+   the datagrid primitives (.panel2/.dg-* below) in the template redesign
+   (Task 8); this one rule survives because Sachin's EMI-progress rows
+   still use it as a plain vertical PacingBar stack.
    --------------------------------------------------------------------- */
-
-.budget-month-select {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-}
 
 .budget-rows {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-}
-
-.budget-row-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--ink-muted);
-}
-
-.budget-row-flag {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--status-critical-wash);
-  color: var(--status-critical);
-  font-weight: 600;
-}
-
-.budget-row-foodhome {
-  color: var(--ink-secondary);
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------------
@@ -1648,6 +1594,28 @@ tr[data-drift='true'] td {
 @media (max-width: 1100px) {
   .overview-grid { grid-template-columns: 1fr; }
 }
+
+/* Budget screen (Task 8 rebuild): two panels, budget-vs-actual wider than
+   the line-items search panel. */
+.budget-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 1100px) {
+  .budget-grid { grid-template-columns: 1fr; }
+}
+
+/* Line-items panel search box (panel2-head) and its scrolling row body —
+   the only two datagrid primitives Budget needed that Overview didn't. */
+.dg-search {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  width: 170px;
+}
+.dg-search:focus { outline: none; border-color: var(--accent); }
+.dg-body-scroll { max-height: 660px; overflow-y: auto; }
 
 /* State modifiers layered on the datagrid primitives above: a muted
    separator row (carryover / food-budget-remaining — excluded from
