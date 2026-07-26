@@ -1,0 +1,70 @@
+import { describe, expect, it } from 'vitest'
+import { buildKpis } from '../src/lib/kpis'
+import type { MonthData, Tx } from '../src/types'
+
+let row = 0
+function tx(label: string, amountEUR: number | null, kind: 'income' | 'expense'): Tx {
+  return { tab: 'T', row: ++row, label, normLabel: label.toLowerCase(), amountEUR, kind, planned: amountEUR === null, household: false }
+}
+
+function month(tab: string, year: number, mo: number, over: Partial<MonthData> = {}): MonthData {
+  return {
+    tab, period: { year, month: mo }, era: 'v2025',
+    income: [tx('salary', 1000, 'income')], expenses: [tx('rent', 400, 'expense')],
+    carryover: 50,
+    summary: { totalIncome: null, totalExpense: null, balance: null, household: null },
+    banks: [{ name: 'Main', amountEUR: 200 }, { name: 'Revolut Savings', amountEUR: 30 }],
+    bankTotal: null, expectedActual: null, balanceAfterFuture: null,
+    upcoming: [{ name: 'Card', total: 100, toPay: 80 }, { name: 'Food Home', total: 700, toPay: 120 }],
+    issues: [], ...over,
+  }
+}
+
+describe('buildKpis', () => {
+  it('income excludes carryover', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
+    const income = k.find((c) => c.id === 'income')!
+    expect(income.value).toBe(1000) // not 1050
+    expect(income.note).toContain('carryover')
+  })
+
+  it('saved = own income minus expenses', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
+    expect(k.find((c) => c.id === 'saved')!.value).toBe(600)
+  })
+
+  it('upcoming sums bills only — food-home tracker excluded', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
+    expect(k.find((c) => c.id === 'upcoming')!.value).toBe(80)
+  })
+
+  it('savings pot picks /sav/i accounts; cash uses bank sum fallback', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
+    expect(k.find((c) => c.id === 'savings')!.value).toBe(30)
+    expect(k.find((c) => c.id === 'cash')!.value).toBe(230)
+  })
+
+  it('delta + series across months, window ends at selected', () => {
+    const m1 = month('MAY_25', 2025, 5, { expenses: [tx('rent', 300, 'expense')] })
+    const m2 = month('JUN_25', 2025, 6)
+    const k = buildKpis([m2, m1], 'JUN_25') // unsorted input on purpose
+    const saved = k.find((c) => c.id === 'saved')!
+    expect(saved.series).toEqual([700, 600])
+    expect(saved.delta).toBe(-100)
+  })
+
+  it('missing data → null values, no throw', () => {
+    const bare = month('JAN_22', 2022, 1, { banks: [], upcoming: [], bankTotal: null })
+    const k = buildKpis([bare], 'JAN_22')
+    expect(k.find((c) => c.id === 'cash')!.value).toBeNull()
+    expect(k.find((c) => c.id === 'savings')!.value).toBeNull()
+    expect(k.find((c) => c.id === 'networth')!.value).toBeNull()
+  })
+
+  it('networth includes invested when provided', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25', { investedEUR: 1000 })
+    // cash 230 + savings 30 + 1000 − upcoming 80
+    expect(k.find((c) => c.id === 'networth')!.value).toBe(1180)
+    expect(k.find((c) => c.id === 'networth')!.note).toContain('1,000')
+  })
+})
