@@ -41,6 +41,39 @@ let scriptPromise: Promise<void> | null = null
 let tokenClient: TokenClient | null = null
 let currentToken: string | null = null
 let expiresAt = 0
+
+/** localStorage key for the persisted access token. Google access tokens are
+ * ~1h bearer tokens; persisting them means a page reload inside that hour
+ * reuses the token instead of prompting again. Personal-device tradeoff
+ * accepted by the owner (single-user app, readonly scope). */
+const TOKEN_STORE_KEY = 'fp-token-v1'
+
+function persistToken(): void {
+  try {
+    localStorage.setItem(TOKEN_STORE_KEY, JSON.stringify({ token: currentToken, expiresAt }))
+  } catch {
+    /* storage full/blocked — token just won't survive reload */
+  }
+}
+
+/** Restores a still-valid persisted token into module state. Returns it, or
+ * null when absent/expired (expired entries are removed). */
+function restoreToken(): string | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORE_KEY)
+    if (!raw) return null
+    const { token, expiresAt: exp } = JSON.parse(raw) as { token?: string; expiresAt?: number }
+    if (typeof token === 'string' && typeof exp === 'number' && Date.now() < exp - EXPIRY_SAFETY_MS) {
+      currentToken = token
+      expiresAt = exp
+      return token
+    }
+    localStorage.removeItem(TOKEN_STORE_KEY)
+  } catch {
+    /* corrupt entry — ignore */
+  }
+  return null
+}
 /** Resolvers for in-flight silentReauth() calls — handleToken settles every
  * pending one (success or failure) whenever the fixed GIS callback fires,
  * since the token client's callback is set once at initTokenClient() time
@@ -76,6 +109,7 @@ function handleToken(resp: TokenResponse, onToken: (t: string) => void): void {
   }
   currentToken = resp.access_token
   expiresAt = Date.now() + resp.expires_in * 1000
+  persistToken()
   onToken(currentToken)
   resolvers.forEach((resolve) => resolve(currentToken))
 }
@@ -92,6 +126,10 @@ export function getToken(): string | null {
  * consented in this browser, otherwise the callback simply never fires and
  * the caller falls back to signIn() on first use. */
 export function initAuth(onToken: (t: string) => void): void {
+  // A reload within the token's ~1h lifetime reuses the persisted token
+  // immediately — no GIS round-trip, no prompt. The token client is still
+  // initialized below so later silentReauth()/signIn() calls work.
+  const restored = restoreToken()
   loadGisScript()
     .then(() => {
       const google = window.google
@@ -101,11 +139,12 @@ export function initAuth(onToken: (t: string) => void): void {
         scope: SCOPE,
         callback: (resp) => handleToken(resp, onToken),
       })
-      tokenClient.requestAccessToken({ prompt: '' })
+      if (!restored) tokenClient.requestAccessToken({ prompt: '' })
     })
     .catch((err: unknown) => {
       console.error('[gis] initAuth failed:', err)
     })
+  if (restored) onToken(restored)
 }
 
 /** One silent re-auth attempt (`prompt: ''`) for recovering from a token
@@ -144,5 +183,7 @@ export function signIn(): void {
     console.error('[gis] signIn() called before initAuth()')
     return
   }
-  tokenClient.requestAccessToken({ prompt: 'consent' })
+  // No prompt override: Google shows the consent screen only when it has to
+  // (first grant, revoked consent) instead of on every interactive sign-in.
+  tokenClient.requestAccessToken()
 }
