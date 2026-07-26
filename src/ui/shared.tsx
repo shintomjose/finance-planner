@@ -1,11 +1,15 @@
 // Shared, chrome-only building blocks used across screens: money
 // formatting, stat tiles, section chrome, and empty/loading placeholders.
-// Deliberately has NO import of recharts or anything in ./charts — this
-// module is reachable from the eager App/Layout shell, and pulling
-// recharts in here would put it in the initial bundle instead of a lazy
-// screen chunk. A caller that wants a chart inside a StatCard imports
-// Sparkline itself and passes it as the `trend` node.
+// StatCard still takes a pre-rendered `trend` node so screens that only
+// need a plain stat tile never pull in recharts. KpiCardView (Task 6) is
+// the one exception: it renders its own <Sparkline> directly, because by
+// the time it exists KpiRow is already part of the eager Layout shell
+// (rendered outside the lazy screen Suspense boundary on 4 of 9 screens),
+// so recharts is in the main bundle regardless of which file does the
+// importing — there's no lazy boundary left to protect here.
 import type { ReactNode } from 'react'
+import type { KpiCard } from '../lib/kpis'
+import { Sparkline } from './charts/Sparkline'
 
 const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
 const inrFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'INR' })
@@ -145,6 +149,50 @@ export function LoadingState({ label = 'Loading…' }: { label?: string }) {
     <div className="loading-state" role="status" aria-live="polite">
       <span className="loading-spinner" aria-hidden="true" />
       <span>{label}</span>
+    </div>
+  )
+}
+
+/** Bare track + fill meter (e.g. a budget-pacing or goal-progress bar with
+ * no reserved status color of its own). `pct` is clamped to [0, 100]. */
+export function BarMeter({ pct, color }: { pct: number; color?: string }) {
+  const w = Math.max(0, Math.min(100, pct))
+  return (
+    <div className="meter">
+      <div className="meter-fill" style={{ width: `${w}%`, background: color ?? 'var(--accent)' }} />
+    </div>
+  )
+}
+
+/** One card in the global KPI row (KpiRow.tsx / Layout.tsx). `card.value`
+ * and `card.delta` are already the metric's natural sign (e.g. a bill
+ * increase is a positive `delta` even though `goodUp` is false for
+ * Expenses) — tone compares the delta's sign against `goodUp` rather than
+ * against zero on its own, so a bigger expense reads red and a bigger
+ * income reads green. */
+export function KpiCardView({ card }: { card: KpiCard }) {
+  const { label, value, delta, goodUp, series, note } = card
+  const deltaTone: 'good' | 'bad' | 'neutral' = delta == null || delta === 0 ? 'neutral' : (delta > 0) === goodUp ? 'good' : 'bad'
+  const valueTone: 'bad' | 'neutral' = value != null && value < 0 ? 'bad' : 'neutral'
+
+  return (
+    <div className="kpi-card">
+      <div className="kicker">{label}</div>
+      <div className={`kpi-value num${valueTone === 'bad' ? ' tone-bad' : ''}`}>
+        {value == null ? '—' : <Money amountEUR={value} tabular />}
+      </div>
+      <div className={`kpi-delta num tone-${deltaTone}`}>
+        {delta == null ? (
+          <span className="money-dash">—</span>
+        ) : (
+          <>
+            {delta > 0 && '+'}
+            <Money amountEUR={delta} tabular />
+          </>
+        )}
+      </div>
+      <Sparkline data={series} height={26} />
+      <div className="kpi-note">{note}</div>
     </div>
   )
 }

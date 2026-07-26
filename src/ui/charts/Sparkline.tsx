@@ -6,7 +6,10 @@ import { getPalette } from './palette'
 import { useColorScheme } from './useColorScheme'
 
 export interface SparklineProps {
-  data: number[]
+  /** null entries are gaps (e.g. a month with no bank data) — recharts'
+   * `Line` skips them (connectNulls defaults false), which is exactly the
+   * point: a break in the line rather than a false zero. */
+  data: (number | null)[]
   height?: number
   tone?: 'accent' | 'muted'
 }
@@ -16,7 +19,7 @@ export function Sparkline({ data, height = 32, tone = 'accent' }: SparklineProps
   const points = data.map((v, i) => ({ i, v }))
   const stroke = tone === 'accent' ? palette.categorical[0] : palette.textMuted
 
-  if (points.length < 2) return null
+  if (points.filter((p) => p.v != null).length < 2) return null
 
   return (
     <ResponsiveContainer width="100%" height={height}>
