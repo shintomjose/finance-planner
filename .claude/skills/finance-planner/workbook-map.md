@@ -18,7 +18,7 @@ ONLY — no dates in cells. Volume: 4,306 expense rows (avg 47/mo), 866 income r
 | Expenses | `C2:D80` | flat list, label = category. D may hold inline arithmetic (`=18.99+3.99`) — UNFORMATTED_VALUE gives the number. D blank = planned/unpaid. |
 | Summary | `F1:G9` | see era table below. Household cell is a hand-picked `=D19+D20+…` sum — parse its formula refs to tag household expense rows. |
 | Bank balances | `I2:J~10` | account/EUR rows until I=`Total` (J at that row `=SUM`), next rows `Expected-Actual` (J7), `Balance After future Expense` (J8). Below: free-form scratch (INR banks, credit cards, debt lists) — ingest as notes only. |
-| Upcoming | `M2:O~55` | name/total/to-pay until M=`Total`. Row *varies* — locate by label. |
+| Upcoming | `M2:O~55` | name/total/to-pay until M=`Total`. Row *varies* — locate by label. `Food Home` is the monthly food-budget tracker, not a payable bill: N = budget (700), O (to-pay) = remaining budget for the rest of the month. Same semantics may apply to other budget-tracker rows; treat any upcoming row whose label normalizes to 'food home' this way. |
 
 ### 1.2 Template eras
 
