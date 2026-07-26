@@ -80,12 +80,16 @@ export function StatCard({ label, value, sub, tone = 'neutral', trend }: StatCar
 export interface SectionProps {
   title?: string
   actions?: ReactNode
+  /** Extra class appended to the root 'section' element — lets a caller
+   * (e.g. Overview's dashboard grid) tighten spacing for its own layout
+   * without a new component. */
+  className?: string
   children: ReactNode
 }
 
-export function Section({ title, actions, children }: SectionProps) {
+export function Section({ title, actions, className, children }: SectionProps) {
   return (
-    <section className="section">
+    <section className={className ? `section ${className}` : 'section'}>
       {(title || actions) && (
         <div className="section-head">
           {title && <h3 className="section-title">{title}</h3>}
@@ -94,6 +98,31 @@ export function Section({ title, actions, children }: SectionProps) {
       )}
       {children}
     </section>
+  )
+}
+
+export interface PanelProps {
+  title: string
+  /** Extra class appended to the root 'panel' element for grid placement
+   * (e.g. 'overview-panel-income'). */
+  className?: string
+  children: ReactNode
+}
+
+/** Dashboard-grid building block (Overview redesign): a bordered card with
+ * a header that never scrolls and a body that scrolls internally
+ * (`overflow-y: auto`) once its container gets a bounded height — see
+ * `.panel` / `.panel-head` / `.panel-body` in app.css. Kept here (not
+ * local to Overview.tsx) because the pattern is generically useful for any
+ * screen that wants a fixed-height scrollable card. */
+export function Panel({ title, className, children }: PanelProps) {
+  return (
+    <div className={className ? `panel ${className}` : 'panel'}>
+      <div className="panel-head">
+        <h3 className="panel-title">{title}</h3>
+      </div>
+      <div className="panel-body">{children}</div>
+    </div>
   )
 }
 
