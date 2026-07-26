@@ -9,30 +9,99 @@
    text stays in the plain system sans (dataviz: numerals and chart text
    are never a display face). */
 
-:root {
-  /* --- Color: chart-surface roles (kept 1:1 with charts/palette.ts) --- */
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --surface-2: #f3f2ee;
-  --ink: #0b0b0b;
-  --ink-secondary: #52514e;
-  --ink-muted: #898781;
-  --gridline: #e1e0d9;
-  --hairline: rgba(11, 11, 11, 0.1);
-  --accent: #2a78d6;
-  --accent-ink: #ffffff;
-  --accent-wash: rgba(42, 120, 214, 0.12);
-  --success: #006300;
-  --danger: #b00020;
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
-  --status-good-wash: #e3f5e3;
-  --status-warning-wash: #fef2d9;
-  --status-critical-wash: #fbe2e2;
+:root, :root[data-theme='dark'] {
+  /* --- Color: template palette (dark, also the pre-hydration default) --- */
+  --bg: #0a0b0d;
+  --surface: #101115;
+  --surface-2: #0c0d10;
+  --surface-3: #0d0e12;
+  --border: #1e2026;
+  --border-row: #16181d;
+  --text: #e8e8ea;
+  --text-2: #a9abb4;
+  --muted: #8b8d96;
+  --faint: #65676e;
+  --green: #5ec98a;
+  --green-deep: #4f9d76;
+  --red: #d8705e;
+  --brick: #a8604f;
+  --blue: #7fb7ff;
+  --amber: #c9a45e;
+  --track: #1a1d23;
+  --accent: #7fb7ff;
+  --accent-ink: #0a0b0d;
+  --accent-wash: rgba(127, 183, 255, 0.14);
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* --- Type --- */
+  /* --- Legacy names (kept 1:1 for every existing consumer), remapped onto
+     the palette above: chart-surface/ink roles -> surface/text roles,
+     status ladder -> green/amber/brick/red --- */
+  --page: var(--bg);
+  --ink: var(--text);
+  --ink-secondary: var(--text-2);
+  --ink-muted: var(--muted);
+  --gridline: var(--border);
+  --hairline: var(--border-row);
+  --success: var(--green);
+  --danger: var(--red);
+  --status-good: var(--green);
+  --status-warning: var(--amber);
+  --status-serious: var(--brick);
+  --status-critical: var(--red);
+  --status-good-wash: rgba(94, 201, 138, 0.16);
+  --status-warning-wash: rgba(201, 164, 94, 0.16);
+  --status-critical-wash: rgba(216, 112, 94, 0.16);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  /* --- Color: template palette (light) --- */
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --surface-2: #f2f2ef;
+  --surface-3: #efefec;
+  --border: #e4e4e0;
+  --border-row: #ececea;
+  --text: #1d1e22;
+  --text-2: #45464c;
+  --muted: #6b6d75;
+  --faint: #8e9098;
+  --green: #2e7d54;
+  --green-deep: #256744;
+  --red: #b8503e;
+  --brick: #a05240;
+  --blue: #2a6fc0;
+  --amber: #9a7728;
+  --track: #e6e6e2;
+  --accent: #2a6fc0;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(42, 111, 192, 0.12);
+
+  /* --- Legacy names, light remap --- */
+  --page: var(--bg);
+  --ink: var(--text);
+  --ink-secondary: var(--text-2);
+  --ink-muted: var(--muted);
+  --gridline: var(--border);
+  --hairline: var(--border-row);
+  --success: var(--green);
+  --danger: var(--red);
+  --status-good: var(--green);
+  --status-warning: var(--amber);
+  --status-serious: var(--brick);
+  --status-critical: var(--red);
+  --status-good-wash: rgba(46, 125, 84, 0.12);
+  --status-warning-wash: rgba(154, 119, 40, 0.12);
+  --status-critical-wash: rgba(184, 80, 62, 0.12);
+  --shadow-card: 0 1px 2px rgba(29, 30, 34, 0.05), 0 1px 1px rgba(29, 30, 34, 0.03);
+
+  color-scheme: light;
+}
+
+:root {
+  /* --- Type (theme-invariant) --- */
   --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Noto Serif', serif;
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --text-2xs: 0.6875rem;
@@ -59,35 +128,9 @@
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 1px rgba(11, 11, 11, 0.03);
 
   --sidebar-w: 15.5rem;
   --bottomnav-h: 4.25rem;
-
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #212120;
-    --ink: #ffffff;
-    --ink-secondary: #c3c2b7;
-    --ink-muted: #898781;
-    --gridline: #2c2c2a;
-    --hairline: rgba(255, 255, 255, 0.1);
-    --accent: #3987e5;
-    --accent-ink: #051423;
-    --accent-wash: rgba(57, 135, 229, 0.16);
-    --success: #0ca30c;
-    --danger: #e66767;
-    --status-good-wash: rgba(12, 163, 12, 0.16);
-    --status-warning-wash: rgba(250, 178, 25, 0.16);
-    --status-critical-wash: rgba(208, 59, 59, 0.18);
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
-    color-scheme: dark;
-  }
 }
 
 * {
@@ -98,9 +141,15 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   font-size: var(--text-base);
-  background: var(--page);
-  color: var(--ink);
+  background: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 button {
