@@ -15,6 +15,9 @@
 // new typo merge here as `<misspelled-normalized>: '<canonical-normalized>'`.
 const ALIASES: Record<string, string> = {
   advancia: 'advanzia',
+  // Owner (2026-07-26): the sheet label "Amazon CC" IS the Sparkasse card —
+  // merge it so credit-card grouping shows one Sparkasse row.
+  'amazon cc': 'sparkasse',
 }
 
 export function normLabel(raw: string): string {
@@ -57,7 +60,7 @@ const FIXED = [
   'SBI Life(36596)',
   'Telekom',
   'ICICI BILL',
-  'Amazon CC',
+  // 'Amazon CC' intentionally absent: aliased to 'sparkasse' (credit card).
   'iPhone',
   'Mutual Funds & India',
 ]
@@ -112,8 +115,8 @@ const TRANSFER = [
 ]
 
 // Owner's actual credit cards (live-review, 2026-07-26): Amex, Sparkasse,
-// Advanzia. Deliberately does NOT absorb 'amazon cc' / 'icici bill' from the
-// FIXED list above — owner named exactly these 3 cards, others stay put.
+// Advanzia. 'amazon cc' is aliased to 'sparkasse' (owner: same card);
+// 'icici bill' stays in FIXED — owner named exactly these 3 cards.
 // 'advanzia' here also catches the 'advancia' typo via the ALIASES map above
 // (normLabel runs before this lookup for every consumer).
 const CREDIT_CARD = [
