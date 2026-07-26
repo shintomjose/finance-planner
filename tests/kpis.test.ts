@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildKpis } from '../src/lib/kpis'
+import { buildKpis, monthMetrics } from '../src/lib/kpis'
 import type { MonthData, Tx } from '../src/types'
 
 let row = 0
@@ -77,6 +77,10 @@ describe('buildKpis', () => {
     expect(k.find((c) => c.id === 'income')!.note).toContain('no carryover')
     expect(k.find((c) => c.id === 'savings')!.value).toBeNull()
     expect(k.find((c) => c.id === 'savings')!.note).toContain('no savings account')
+  })
+
+  it('monthMetrics (exported for Trends reuse) computes the same upcoming figure as buildKpis', () => {
+    expect(monthMetrics(month('JUN_25', 2025, 6)).upcoming).toBe(80)
   })
 
   it('networth includes invested when provided', () => {
