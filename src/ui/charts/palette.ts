@@ -1,10 +1,8 @@
 // Single source of chart color for the whole app (dataviz skill: "one
-// palette system, no per-screen ad-hoc colors"). Values are the dataviz
-// skill's reference palette (references/palette.md) — validated with
-// scripts/validate_palette.js for both chart surfaces:
-//   light: worst adjacent CVD dE 9.1, normal-vision floor 19.6, contrast WARN
-//          on 3 slots (relief = legend + tooltip text, always shipped)
-//   dark:  worst adjacent CVD dE 8.4, normal-vision floor 19.3, contrast PASS
+// palette system, no per-screen ad-hoc colors"). Values are derived from
+// the app's template design tokens (src/ui/app.css `:root[data-theme]`)
+// so chart marks read as part of the same visual system as the app chrome,
+// not a second unrelated palette bolted on top.
 // Categorical hues are assigned in this fixed order and never cycled or
 // re-sorted by value — identity, not rank. Status colors are a separate
 // reserved scale, never reused as a series color.
@@ -39,34 +37,34 @@ export interface ChartPalette {
   deltaBad: string
 }
 
-const LIGHT: ChartPalette = {
-  categorical: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
-  sequential: ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'],
-  status: { good: '#0ca30c', warning: '#fab219', serious: '#ec835a', critical: '#d03b3b' },
-  neutral: '#898781',
-  surface: '#fcfcfb',
-  gridline: '#e1e0d9',
-  axis: '#c3c2b7',
-  textPrimary: '#0b0b0b',
-  textSecondary: '#52514e',
-  textMuted: '#898781',
-  deltaGood: '#006300',
-  deltaBad: '#b00020',
+const DARK: ChartPalette = {
+  categorical: ['#7fb7ff', '#a8604f', '#5ec98a', '#c9a45e', '#8f7fc4', '#5eb8c9', '#c95e93', '#9ab05e'],
+  sequential: ['#16202e', '#1f3350', '#2a4a75', '#38639c', '#4a7ec2', '#639ae4', '#7fb7ff'],
+  status: { good: '#5ec98a', warning: '#c9a45e', serious: '#d8705e', critical: '#e05252' },
+  neutral: '#6c7180',
+  surface: '#101115',
+  gridline: '#1c1e24',
+  axis: '#2a2d34',
+  textPrimary: '#e8e8ea',
+  textSecondary: '#a9abb4',
+  textMuted: '#8b8d96',
+  deltaGood: '#5ec98a',
+  deltaBad: '#d8705e',
 }
 
-const DARK: ChartPalette = {
-  categorical: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
-  sequential: ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'],
-  status: { good: '#0ca30c', warning: '#fab219', serious: '#ec835a', critical: '#d03b3b' },
-  neutral: '#898781',
-  surface: '#1a1a19',
-  gridline: '#2c2c2a',
-  axis: '#383835',
-  textPrimary: '#ffffff',
-  textSecondary: '#c3c2b7',
-  textMuted: '#898781',
-  deltaGood: '#0ca30c',
-  deltaBad: '#e66767',
+const LIGHT: ChartPalette = {
+  categorical: ['#2a6fc0', '#a05240', '#2e7d54', '#9a7728', '#6a5aa8', '#2e7f93', '#a8446e', '#6d7f37'],
+  sequential: ['#dbe8f8', '#b7d1f0', '#8fb5e5', '#6698d7', '#437cc4', '#2a6fc0', '#1d569c'],
+  status: { good: '#2e7d54', warning: '#9a7728', serious: '#b8503e', critical: '#a52929' },
+  neutral: '#8e9098',
+  surface: '#ffffff',
+  gridline: '#ececea',
+  axis: '#d5d5d1',
+  textPrimary: '#1d1e22',
+  textSecondary: '#45464c',
+  textMuted: '#6b6d75',
+  deltaGood: '#2e7d54',
+  deltaBad: '#b8503e',
 }
 
 export function getPalette(scheme: ColorScheme): ChartPalette {
