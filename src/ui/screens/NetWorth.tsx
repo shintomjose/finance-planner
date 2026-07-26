@@ -35,7 +35,10 @@ export interface NetWorthScreenProps {
 
 const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
 const fmtEUR = (v: number) => (Number.isFinite(v) ? eurFmt.format(v) : eurFmt.format(0))
-const fmtPct = (v: number | null) => (v == null ? '–' : `${v > 0 ? '+' : ''}${Math.round(v * 10) / 10}%`)
+// Dash sweep (final review): standardized to the em-dash '—' — matches this
+// same screen's own plEUR null-fallback a few lines below (`s.plEUR == null
+// ? '—' : …`), which fmtPct's result sits directly beside in the sources row.
+const fmtPct = (v: number | null) => (v == null ? '—' : `${v > 0 ? '+' : ''}${Math.round(v * 10) / 10}%`)
 
 // Sources that carry an INR figure underneath — everything else (bank, db,
 // binance) is already a straight EUR read, so showing a re-derived ₹ number

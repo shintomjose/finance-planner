@@ -25,7 +25,11 @@ const TABS: { id: LogTab; label: string }[] = [
 const fmtPerLitre = (v: number) => `€${v.toFixed(2)}/L`
 const fmtEURPerVisit = (v: number) => `€${v.toFixed(2)}`
 const fmtVisits = (v: number) => `${v}`
-const fmtNum = (v: number | string | null) => (typeof v === 'number' ? String(v) : '–')
+// Dash sweep (final review): standardized to the em-dash '—' used
+// everywhere else a numeric/money-shaped figure is missing on this same
+// screen (avgPerLitre, perLitre a few lines below) — these litres/km
+// figures were the odd one out at the en-dash '–' inside the SAME table.
+const fmtNum = (v: number | string | null) => (typeof v === 'number' ? String(v) : '—')
 
 function PetrolPanel({ logs }: { logs: LogEntry[] }) {
   const stats = petrolStats(logs)
@@ -42,7 +46,7 @@ function PetrolPanel({ logs }: { logs: LogEntry[] }) {
         <StatCard label="Avg €/L" value={stats.avgPerLitre == null ? '—' : `€${stats.avgPerLitre.toFixed(2)}`} />
         <StatCard
           label="Consumption"
-          value={stats.consumptionL100km == null ? '–' : `${stats.consumptionL100km} L/100km`}
+          value={stats.consumptionL100km == null ? '—' : `${stats.consumptionL100km} L/100km`}
           sub={stats.consumptionL100km == null ? 'Needs 2+ fills with a recorded odometer reading' : undefined}
         />
       </div>
@@ -67,6 +71,12 @@ function PetrolPanel({ logs }: { logs: LogEntry[] }) {
           <tbody>
             {entries.map((e, i) => (
               <tr key={i}>
+                {/* Dash sweep (final review): a date fallback, left as the
+                    en-dash '–' — the existing convention for a missing date
+                    elsewhere in the app (Trips.tsx, Sachin.tsx both use
+                    `?? '–'` for their own date columns), so this stays
+                    consistent with that rather than the money-shaped '—'
+                    used for the numeric columns above. */}
                 <td>{e.date ?? '–'}</td>
                 <td>{fmtNum(e.fields.litres)}</td>
                 <td>

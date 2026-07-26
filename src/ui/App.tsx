@@ -18,6 +18,7 @@ import { useState } from 'react'
 import { useAppData } from '../data/useAppData'
 import { pickDisplayedMonth } from '../lib/period'
 import { bannerFor } from '../lib/banner'
+import { buildNetWorth } from '../lib/networth'
 import { Layout, SCREEN_REGISTRY } from './Layout'
 import type { ScreenId } from './Layout'
 import { SignIn } from './SignIn'
@@ -57,16 +58,28 @@ export default function App() {
     )
   }
 
-  // `state.data.months` is non-empty here (the hook routes zero-month
-  // results to the 'error' state before ever reaching 'ready'), so
-  // pickDisplayedMonth always returns a month — no fallback needed.
   const { months, issues, plan, mutualFunds, deutscheBank, binance, sachin, trips } = state.data
-  const displayedTab = pickDisplayedMonth(months, now)!.tab
+  // `months` is non-empty here (the hook routes zero-month results to
+  // 'error' before ever reaching 'ready'), so pickDisplayedMonth always
+  // returns a month — no fallback needed. Reused below for both
+  // `displayedTab` and the KPI row's `investedEUR` (same "latest month"
+  // NetWorth.tsx's own buildNetWorth call uses).
+  const latestMonth = pickDisplayedMonth(months, now)!
+  const displayedTab = latestMonth.tab
   const { bannerForDisplayedTab, otherFailedTabCount } = bannerFor(issues, displayedTab)
-  // `months` is non-empty here, and pickDisplayedMonth always returns a
-  // month for a non-empty array, so the fallback `!` is safe the same way
-  // displayedTab's is above.
-  const selectedMonth = months.find((m) => m.tab === selectedTab) ?? pickDisplayedMonth(months, now)!
+  const selectedMonth = months.find((m) => m.tab === selectedTab) ?? latestMonth
+
+  // KPI row options (wires the previously-dead KpiOptions — see kpis.ts):
+  //  - target: locked rule (same expression Overview.tsx's savings-progress
+  //    panel uses) — a real, positive plan surplus, else no target at all
+  //    (never a hardcoded fallback figure).
+  //  - investedEUR: buildNetWorth (src/lib/networth.ts) is a pure aggregate
+  //    of the invested basis across every connected source (DB/MF/Binance/
+  //    Upstocks) already built from data this component has in hand — reuse
+  //    it rather than inventing new investment math. `investedTotalEUR` is
+  //    a plain sum, so this stays "cheap and correct" per the fix brief.
+  const target = plan?.budgetTotals.surplus != null && plan.budgetTotals.surplus > 0 ? plan.budgetTotals.surplus : null
+  const investedEUR = buildNetWorth(latestMonth, plan, mutualFunds, deutscheBank, binance, appState.fxRate).investedTotalEUR
 
   return (
     <Layout
@@ -76,6 +89,7 @@ export default function App() {
       months={months}
       selectedMonth={selectedMonth}
       onSelectMonth={setSelectedTab}
+      kpiOpts={{ target, investedEUR }}
       banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
       chip={
         otherFailedTabCount > 0 ? (

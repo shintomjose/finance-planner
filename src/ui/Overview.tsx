@@ -7,12 +7,17 @@
 // Every number on this screen comes from an already-tested lib rather than
 // being recomputed inline:
 //  - category breakdown: categorize()/normLabel() (normalize.ts) bucket
-//    selectedMonth.expenses; budget/variance columns are sourced from
-//    budgetActuals()'s rows (matched on normLabel(category) — see the
-//    per-column comment below for why the match is on the CATEGORY STRING,
-//    not budgetActuals' own `actual`). The footer only shows Budget/Var
-//    when EVERY category row matched a budget line — see the reconciliation
-//    comment above the footer JSX for why a partial match can't reconcile.
+//    selectedMonth.expenses; the Budget/Var columns are sourced by
+//    aggregating plan.budget's OWN rows into the same buckets (each row's
+//    plannedMonthly summed under categorize(normLabel(row.category),
+//    overrides)) — not budgetActuals()'s rows, which stay keyed by each
+//    row's own granular label (see budgetActuals.ts's tier-1/tier-2 doc
+//    comment). budgetActuals' granular keys never matched this panel's
+//    bucket keys (a real reviewer finding — "Rent"/"Vodafone" rows never
+//    hit "fixed"), which is why the Budget/Var columns were dead before this
+//    fix. The footer only shows Budget/Var when EVERY category row matched a
+//    budget line — see the reconciliation comment above the footer JSX for
+//    why a partial match can't reconcile.
 //  - a drift note (amber, under the panel head) surfaces when
 //    overviewFigures() reports the sheet's own totals disagreeing with the
 //    app's recompute by more than a cent — same drift fields the old
@@ -41,7 +46,6 @@
 //    standalone card; the rebuild's `categorize()` bucket "credit card"
 //    would otherwise fold these into the category panel's single row).
 import { useState } from 'react'
-import { budgetActuals } from '../lib/budgetActuals'
 import { creditCardBills } from '../lib/creditCardBills'
 import { partitionUpcoming } from '../lib/foodHome'
 import { groupIncome } from '../lib/incomeGroups'
@@ -53,6 +57,7 @@ import type { MonthlyPlanData } from '../parse/monthlyPlan'
 import { DEFAULT_STATE } from '../state/appState'
 import type { AppState } from '../state/appState'
 import type { MonthData, Tx } from '../types'
+import { categoryColor } from './charts/categoryColor'
 import { getPalette } from './charts/palette'
 import { useColorScheme } from './charts/useColorScheme'
 import { BarMeter, EmptyState, Money } from './shared'
@@ -135,15 +140,19 @@ export function Overview({
     else byCategory.set(cat, [tx])
   }
 
-  // budgetActuals needs a `now` for pctOfMonth/pctOfBudget pacing fields —
-  // this screen only reads `plannedMonthly` off its rows, which those
-  // fields don't affect, so the exact instant passed here is immaterial.
-  const budgetView = plan ? budgetActuals(selectedMonth, plan.budget, overrides, new Date(), plan.budgetTotals.surplus) : null
+  // Bucket-aggregate plan.budget's own (granular) rows into the SAME
+  // buckets categoryRows below is keyed by, so the Budget/Var columns
+  // actually hit something (human-approved fix — see the file-header
+  // comment for why budgetActuals()'s own granular-label rows can't be used
+  // here directly). A row with a null plannedMonthly still marks its bucket
+  // as "budgeted" (contributes 0, but the bucket key IS set) rather than
+  // leaving the bucket looking unbudgeted just because one of its rows has
+  // no planned figure.
   const budgetByCategory = new Map<string, number>()
-  if (budgetView) {
-    for (const row of budgetView.rows) {
-      const key = normLabel(row.category)
-      if (!budgetByCategory.has(key)) budgetByCategory.set(key, row.plannedMonthly)
+  if (plan) {
+    for (const b of plan.budget) {
+      const bucket = categorize(normLabel(b.category), overrides)
+      budgetByCategory.set(bucket, round2((budgetByCategory.get(bucket) ?? 0) + (b.plannedMonthly ?? 0)))
     }
   }
 
@@ -219,8 +228,16 @@ export function Overview({
   const billsTotal = round2(bills.reduce((s, u) => s + (u.toPay ?? 0), 0))
   const coverage = round2(bankTotal - billsTotal)
   const providerGroups = groupUpcoming(bills)
+  // Suppress the coverage claim entirely for a month with nothing to cover
+  // and nothing to cover it with — "Covered … with €0.00 to spare" over an
+  // empty month reads as a real claim about data that was never recorded,
+  // not a genuinely-covered position.
   const coverageNote =
-    coverage >= 0 ? `Covered by cash + savings with ${fmtEUR(coverage)} to spare.` : `Obligations exceed cash + savings by ${fmtEUR(Math.abs(coverage))}.`
+    selectedMonth.banks.length === 0 && bills.length === 0
+      ? null
+      : coverage >= 0
+        ? `Covered by cash + savings with ${fmtEUR(coverage)} to spare.`
+        : `Obligations exceed cash + savings by ${fmtEUR(Math.abs(coverage))}.`
 
   // --- Panel 3c: Credit card bills (human-approved reintegration) --------
   const { rows: cardRows, total: cardTotal } = creditCardBills(selectedMonth.expenses, overrides)
@@ -253,8 +270,8 @@ export function Overview({
               <span className="right">Budget</span>
               <span className="right">Var</span>
             </div>
-            {categoryRows.map((row, i) => {
-              const color = palette.categorical[i % 8]
+            {categoryRows.map((row) => {
+              const color = categoryColor(row.category, palette)
               const sharePct = totalExpense > 0 ? (row.total / totalExpense) * 100 : 0
               const varianceColor = row.variance == null ? undefined : row.variance >= 0 ? 'var(--green)' : 'var(--red)'
               const isOpen = expandedCategory === row.category
@@ -464,7 +481,7 @@ export function Overview({
             <span>Upcoming to pay</span>
             <span className="panel2-meta">{bills.length} bills</span>
           </div>
-          <div className="dg-note">{coverageNote}</div>
+          {coverageNote && <div className="dg-note">{coverageNote}</div>}
           {providerGroups.length === 0 && foodHomeRemaining == null ? (
             <EmptyState message="Nothing upcoming." />
           ) : (

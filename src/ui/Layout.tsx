@@ -12,6 +12,7 @@
 import { Suspense, useState } from 'react'
 import type { ReactNode } from 'react'
 import { KpiRow } from './KpiRow'
+import type { KpiOptions } from '../lib/kpis'
 import { overviewFigures } from '../lib/overviewFigures'
 import { sortByPeriod } from '../lib/mathUtils'
 import type { MonthData } from '../types'
@@ -48,6 +49,11 @@ export interface LayoutProps {
   banner?: ReactNode
   chip?: ReactNode
   screenProps: ScreenProps
+  /** Target/investedEUR passed straight through to KpiRow's `opts` (App.tsx
+   * computes both — see App.tsx's top comment). Optional so non-App.tsx
+   * callers (tests) aren't forced to supply it; KpiRow itself already
+   * defaults `opts` to `{}`. */
+  kpiOpts?: KpiOptions
 }
 
 export function Layout({
@@ -60,6 +66,7 @@ export function Layout({
   banner,
   chip,
   screenProps,
+  kpiOpts,
 }: LayoutProps) {
   const ActiveComponent = SCREEN_REGISTRY[active].component
   const sorted = sortByPeriod(months)
@@ -152,7 +159,7 @@ export function Layout({
       {banner}
       {chip}
 
-      {KPI_SCREENS.has(active) && <KpiRow months={months} selectedTab={selectedMonth.tab} />}
+      {KPI_SCREENS.has(active) && <KpiRow months={months} selectedTab={selectedMonth.tab} opts={kpiOpts} />}
 
       <main className="screen">
         <Suspense fallback={<LoadingState label="Loading module…" />}>

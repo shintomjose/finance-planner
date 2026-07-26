@@ -87,6 +87,8 @@ describe('buildKpis', () => {
     const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25', { investedEUR: 1000 })
     // cash 230 + savings 30 + 1000 − upcoming 80
     expect(k.find((c) => c.id === 'networth')!.value).toBe(1180)
-    expect(k.find((c) => c.id === 'networth')!.note).toContain('1,000')
+    // de-DE thousands/decimal convention (matches Money's own locale), not
+    // en-US — see kpis.ts's fmtNum comment.
+    expect(k.find((c) => c.id === 'networth')!.note).toContain('1.000,00')
   })
 })
