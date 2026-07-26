@@ -66,6 +66,10 @@ Domain model (spec §4): `Transaction`, `MonthSummary`, `Budget`,
   and then runs through the user-editable category map (seed list in
   workbook-map.md §Labels).
 - Blank expense amount (D empty) = planned/unpaid → flag `planned`, not zero.
+- **`Food Home` in the Upcoming block is the monthly food-budget tracker:**
+  N = budget (700), O (to-pay) = remaining budget this month — not a payable
+  bill. Same semantics may apply to other budget-tracker rows; treat any
+  upcoming row whose label normalizes to 'food home' this way.
 
 ## Sheets API + GIS pattern
 
