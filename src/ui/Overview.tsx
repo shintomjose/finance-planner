@@ -1,7 +1,8 @@
-// Overview screen (template redesign, Task 7): a 3-column datagrid layout
-// driven entirely by the global month-pill selection (`selectedMonth`) —
-// no internal "which month to show" logic here anymore (that lived in
-// pickDisplayedMonth pre-Task 6; App.tsx/Layout.tsx own it now).
+// Overview screen (template redesign, Task 7; amended post-review): a
+// 3-column datagrid layout driven entirely by the global month-pill
+// selection (`selectedMonth`) — no internal "which month to show" logic
+// here anymore (that lived in pickDisplayedMonth pre-Task 6; App.tsx/
+// Layout.tsx own it now).
 //
 // Every number on this screen comes from an already-tested lib rather than
 // being recomputed inline:
@@ -9,7 +10,14 @@
 //    selectedMonth.expenses; budget/variance columns are sourced from
 //    budgetActuals()'s rows (matched on normLabel(category) — see the
 //    per-column comment below for why the match is on the CATEGORY STRING,
-//    not budgetActuals' own `actual`).
+//    not budgetActuals' own `actual`). The footer only shows Budget/Var
+//    when EVERY category row matched a budget line — see the reconciliation
+//    comment above the footer JSX for why a partial match can't reconcile.
+//  - a drift note (amber, under the panel head) surfaces when
+//    overviewFigures() reports the sheet's own totals disagreeing with the
+//    app's recompute by more than a cent — same drift fields the old
+//    per-card DriftHint used, just one compact line instead of a
+//    per-StatCard hint (there's no stat-card strip on this screen anymore).
 //  - income: groupIncome() (incomeGroups.ts). Carryover is NOT income (repo
 //    golden rule — see foodHome.ts/normalize.ts skill notes): it renders as
 //    a separate muted row below the groups, excluded from the income total,
@@ -17,9 +25,9 @@
 //  - savings progress: overviewFigures() per month across the trailing
 //    6-month window ending at the selected month (sortByPeriod, mathUtils).
 //    Target rule (locked): plan.budgetTotals.surplus when present and > 0,
-//    else null — bars then scale to the window's own max |saved| instead of
-//    a fixed floor, and the amber tier (which only makes sense relative to
-//    a target) drops out.
+//    else null. Bar denominator: `Math.max(target, 1200)` when a target
+//    exists (a floor so a tiny target doesn't blow the bar to 100% on a
+//    barely-positive month), else the window's own max |saved|.
 //  - upcoming: partitionUpcoming() (foodHome.ts) splits the Food Home
 //    budget-tracker row out of the payable-bills list — it's a monthly
 //    budget remaining figure, not a bill, so it renders as its own muted
@@ -27,8 +35,14 @@
 //    grouping is groupUpcoming() (upcomingProviders.ts). Coverage compares
 //    cash+savings (the Bank accounts panel's own total — "Available +
 //    savings") against the bills total.
+//  - credit cards: creditCardBills() (creditCardBills.ts) groups the
+//    'credit card' bucket by card name — reintegrated per human-approved
+//    review as a 4th column-3 panel (the old Overview had it as a
+//    standalone card; the rebuild's `categorize()` bucket "credit card"
+//    would otherwise fold these into the category panel's single row).
 import { useState } from 'react'
 import { budgetActuals } from '../lib/budgetActuals'
+import { creditCardBills } from '../lib/creditCardBills'
 import { partitionUpcoming } from '../lib/foodHome'
 import { groupIncome } from '../lib/incomeGroups'
 import { round2, sortByPeriod, sumAmounts } from '../lib/mathUtils'
@@ -59,19 +73,32 @@ const INCOME_COLS = '1fr 40px 100px 88px'
 const SAVINGS_COLS = 'auto 1fr 88px 56px'
 const BANK_COLS = '1fr 88px'
 const UPCOMING_COLS = '1fr 40px 88px'
+const CARD_COLS = '1fr 88px'
+
+/** Desc-by-amount comparator that treats a null amount (planned/blank D
+ * column) as "sorts last", with a stable 0 when BOTH sides are null —
+ * `(b ?? -Infinity) - (a ?? -Infinity)` returns NaN for two nulls
+ * (`-Infinity - -Infinity`), which Array.sort leaves in an unspecified
+ * order relative to its neighbors. */
+function compareAmountDesc(a: number | null, b: number | null): number {
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+  return b - a
+}
 
 /** One row inside a `.dg-inset` — reused by the category, income-group and
  * upcoming-provider expansions. A planned/blank-amount entry (D-column
  * blank in the sheet = planned/unpaid, never coerced to zero — see
  * normalize.ts skill notes) is dimmed rather than shown as a real €0; the
- * `Money` component already renders the dash for a null amount. */
+ * `Money` component already renders the dash for a null amount. Uses its
+ * own `.dg-inset-row` class (not `.dg-row`) — `.dg-row` carries a
+ * bottom-hairline meant for a panel's top-level row list, which read as an
+ * inconsistent extra rule once nested inside `.dg-inset`'s own padding. */
 function InsetRow({ label, amount, planned }: { label: string; amount: number | null; planned?: boolean }) {
   const dim = planned || amount == null
   return (
-    <div
-      style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '4px 0', fontSize: 12 }}
-      className={dim ? 'dg-row muted' : undefined}
-    >
+    <div className={dim ? 'dg-inset-row muted' : 'dg-inset-row'}>
       <span>{label}</span>
       <Money amountEUR={amount} tabular />
     </div>
@@ -131,8 +158,32 @@ export function Overview({
 
   const totalExpense = round2(sumAmounts(selectedMonth.expenses))
   const totalBudgetMatched = categoryRows.reduce((s, r) => s + (r.budget ?? 0), 0)
-  const anyBudgetMatched = categoryRows.some((r) => r.budget != null)
-  const totalVarianceMatched = anyBudgetMatched ? round2(totalBudgetMatched - categoryRows.reduce((s, r) => (r.budget != null ? s + r.total : s), 0)) : null
+  const matchedCategoryCount = categoryRows.filter((r) => r.budget != null).length
+  // Footer Var must equal Budget − (the footer's own Actual, which is
+  // ALWAYS the full-month total — never just the matched subset). That
+  // only holds when every category row matched a budget line: with a
+  // partial match, "Budget" (sum of matched rows only) minus "Actual" (all
+  // categories) isn't a meaningful variance, so both show '—' and the
+  // panel head explains the partial coverage instead.
+  const allCategoriesMatched = plan != null && categoryRows.length > 0 && matchedCategoryCount === categoryRows.length
+  const footerBudget = allCategoriesMatched ? totalBudgetMatched : null
+  const footerVariance = allCategoriesMatched ? round2(totalBudgetMatched - totalExpense) : null
+  const budgetCoverageNote =
+    plan && categoryRows.length > 0 && !allCategoriesMatched ? `budget covers ${matchedCategoryCount} of ${categoryRows.length} categories` : null
+
+  // Drift note (human-approved reintegration of the old per-card
+  // DriftHint, compacted to one line): only the figures where the sheet's
+  // own cell disagrees with the app's recompute by more than a cent are
+  // listed — overviewFigures() already returns null for anything that
+  // agrees (or has no sheet cell to compare against).
+  const driftPart = (label: string, sheetValue: number, recomputed: number | null): string | null =>
+    recomputed == null ? null : `${label} ${fmtEUR(sheetValue)} vs ${fmtEUR(recomputed)}`
+  const driftParts = [
+    driftPart('income', figures.income, figures.incomeDrift),
+    driftPart('expenses', figures.expense, figures.expenseDrift),
+    driftPart('balance', figures.balance, figures.balanceDrift),
+  ].filter((s): s is string => s != null)
+  const driftNote = driftParts.length > 0 ? `Sheet totals drift from recomputed: ${driftParts.join(', ')}` : null
 
   // --- Panel 2a: Income sources -----------------------------------------
   const incomeGroups = groupIncome(selectedMonth.income)
@@ -154,7 +205,10 @@ export function Overview({
     return { tab: m.tab, saved, rate }
   })
   const maxAbsSaved = Math.max(1, ...savedPoints.map((p) => Math.abs(p.saved)))
-  const savingsDenom = target ?? maxAbsSaved
+  // Floor of 1200 when a target exists so a small target doesn't make the
+  // bar slam to 100% on a barely-positive saved month; no floor at all
+  // when there's no target (the window's own max |saved| is the scale).
+  const savingsDenom = target != null ? Math.max(target, 1200) : maxAbsSaved
   const totalSaved6 = round2(savedPoints.reduce((s, p) => s + p.saved, 0))
 
   // --- Panel 3a: Bank accounts --------------------------------------------
@@ -168,14 +222,24 @@ export function Overview({
   const coverageNote =
     coverage >= 0 ? `Covered by cash + savings with ${fmtEUR(coverage)} to spare.` : `Obligations exceed cash + savings by ${fmtEUR(Math.abs(coverage))}.`
 
+  // --- Panel 3c: Credit card bills (human-approved reintegration) --------
+  const { rows: cardRows, total: cardTotal } = creditCardBills(selectedMonth.expenses, overrides)
+
   return (
     <div className="overview-grid">
       {/* Panel 1: Expenses by category */}
       <div className="panel2">
         <div className="panel2-head">
           <span>Expenses by category</span>
-          <span className="panel2-meta">{categoryRows.length} categories</span>
+          <span className="panel2-meta">
+            {categoryRows.length} categories{budgetCoverageNote ? ` · ${budgetCoverageNote}` : ''}
+          </span>
         </div>
+        {driftNote && (
+          <div className="dg-note" style={{ color: 'var(--amber)' }}>
+            {driftNote}
+          </div>
+        )}
         {categoryRows.length === 0 ? (
           <EmptyState message="No expenses recorded." />
         ) : (
@@ -194,7 +258,7 @@ export function Overview({
               const sharePct = totalExpense > 0 ? (row.total / totalExpense) * 100 : 0
               const varianceColor = row.variance == null ? undefined : row.variance >= 0 ? 'var(--green)' : 'var(--red)'
               const isOpen = expandedCategory === row.category
-              const sortedItems = [...row.items].sort((a, b) => (b.amountEUR ?? -Infinity) - (a.amountEUR ?? -Infinity))
+              const sortedItems = [...row.items].sort((a, b) => compareAmountDesc(a.amountEUR, b.amountEUR))
               return (
                 <div key={row.category}>
                   <div
@@ -202,9 +266,13 @@ export function Overview({
                     style={{ gridTemplateColumns: CAT_COLS }}
                     role="button"
                     tabIndex={0}
+                    aria-expanded={isOpen}
                     onClick={() => setExpandedCategory(isOpen ? null : row.category)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') setExpandedCategory(isOpen ? null : row.category)
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setExpandedCategory(isOpen ? null : row.category)
+                      }
                     }}
                   >
                     <span className="dot" style={{ background: color }} />
@@ -237,8 +305,13 @@ export function Overview({
               <span className="right">
                 <Money amountEUR={totalExpense} tabular />
               </span>
-              <span className="right">{plan && anyBudgetMatched ? <Money amountEUR={totalBudgetMatched} tabular /> : '—'}</span>
-              <span className="right">{totalVarianceMatched == null ? '—' : <Money amountEUR={totalVarianceMatched} tabular />}</span>
+              <span className="right">{footerBudget == null ? '—' : <Money amountEUR={footerBudget} tabular />}</span>
+              <span
+                className="right"
+                style={{ color: footerVariance == null ? undefined : footerVariance >= 0 ? 'var(--green)' : 'var(--red)' }}
+              >
+                {footerVariance == null ? '—' : <Money amountEUR={footerVariance} tabular />}
+              </span>
             </div>
           </>
         )}
@@ -265,9 +338,13 @@ export function Overview({
                       style={{ gridTemplateColumns: INCOME_COLS }}
                       role="button"
                       tabIndex={0}
+                      aria-expanded={isOpen}
                       onClick={() => setOpenIncome((p) => ({ ...p, [g.name]: !p[g.name] }))}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') setOpenIncome((p) => ({ ...p, [g.name]: !p[g.name] }))
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setOpenIncome((p) => ({ ...p, [g.name]: !p[g.name] }))
+                        }
                       }}
                     >
                       <span>{g.name}</span>
@@ -401,9 +478,13 @@ export function Overview({
                       style={{ gridTemplateColumns: UPCOMING_COLS }}
                       role="button"
                       tabIndex={0}
+                      aria-expanded={isOpen}
                       onClick={() => setOpenUpcoming((p) => ({ ...p, [g.name]: !p[g.name] }))}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') setOpenUpcoming((p) => ({ ...p, [g.name]: !p[g.name] }))
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setOpenUpcoming((p) => ({ ...p, [g.name]: !p[g.name] }))
+                        }
                       }}
                     >
                       <span>{g.name}</span>
@@ -439,6 +520,27 @@ export function Overview({
                 </span>
               </div>
             </>
+          )}
+        </div>
+
+        <div className="panel2">
+          <div className="panel2-head">
+            <span>Credit card bills</span>
+            <span className="panel2-meta">
+              <Money amountEUR={cardTotal} tabular />
+            </span>
+          </div>
+          {cardRows.length === 0 ? (
+            <EmptyState message="No credit card bills this month." />
+          ) : (
+            cardRows.map((r) => (
+              <div className="dg-row" style={{ gridTemplateColumns: CARD_COLS }} key={r.label}>
+                <span>{r.label}</span>
+                <span className="right num">
+                  <Money amountEUR={r.amountEUR} tabular />
+                </span>
+              </div>
+            ))
           )}
         </div>
       </div>

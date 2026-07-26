@@ -1657,3 +1657,11 @@ tr[data-drift='true'] td {
 .dg-row.muted { color: var(--muted); font-style: italic; }
 .dg-note { padding: 8px 14px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--border-row); }
 .panel2[data-tone='bad'] { border-color: var(--brick); }
+
+/* A row inside `.dg-inset` (a category/income-group/upcoming-provider
+   expansion) — deliberately NOT `.dg-row`, which carries a bottom
+   hairline meant for a panel's top-level row list; nested inside
+   `.dg-inset`'s own padding that hairline read as a stray extra rule
+   between items. */
+.dg-inset-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-size: 12px; }
+.dg-inset-row.muted { color: var(--muted); font-style: italic; }
