@@ -8,17 +8,19 @@
 // component only renders the resulting BudgetView plus two additions of its
 // own, both recomputed here rather than trusted from a sheet cell (golden
 // rule):
-//  - a "6-mo avg" column per category, sourced from trends.ts's
-//    categorySeries() (topN = MAX_SAFE_INTEGER so nothing folds into
-//    'other'), matched to a budget row by normLabel(category). Because
-//    categorySeries buckets by categorize() (coarse buckets like "fixed",
-//    "groceries") while most MONTHLY_PLAN budget rows are granular expense
-//    labels ("Rent", "Vodafone" — see budgetActuals.ts's tier-1/tier-2
-//    comment), most budget rows simply have no matching series and render
-//    "—" here; only budget rows that ARE spelled as a bucket name (or any
-//    unbudgeted row, whose category IS a bucket name by construction) get a
-//    real average. That's a real data-shape limitation, not a bug in this
-//    screen — it isn't in scope to change budgetActuals' matching here.
+//  - a "6-mo avg" column per category (human-approved rework, superseding an
+//    earlier categorySeries-based draft): for the ≤6 months strictly BEFORE
+//    selectedMonth.period, budgetActuals() is re-run per month (same pure
+//    function, same budget/overrides/now — it's cheap and already wired),
+//    and each row's `actual` is summed per category across that window, then
+//    divided by the WINDOW LENGTH (not the count of months a category
+//    actually appears in) — a category with zero spend in some of those
+//    months correctly averages down rather than skipping them. Unbudgeted
+//    categories are keyed and averaged the same way. This keys on the exact
+//    same `row.category`/`u.category` strings budgetActuals already produces
+//    for the selected month, so every row gets a real average (no bucket-vs-
+//    granular-label mismatch like the categorySeries approach had); an empty
+//    window (nothing before the selected month) renders "—" everywhere.
 //  - the "All line items" search panel, which reads selectedMonth.expenses
 //    directly (categorize()/normLabel() for the category shown per row).
 //
@@ -32,9 +34,8 @@
 import { Fragment, useMemo, useState } from 'react'
 import { budgetActuals } from '../../lib/budgetActuals'
 import { FOOD_HOME_LABEL, foodHomeRemainingFor } from '../../lib/foodHome'
-import { round2 } from '../../lib/mathUtils'
+import { round2, sortByPeriod } from '../../lib/mathUtils'
 import { categorize, normLabel } from '../../lib/normalize'
-import { categorySeries } from '../../lib/trends'
 import type { MonthlyPlanData } from '../../parse/monthlyPlan'
 import type { AppState } from '../../state/appState'
 import type { MonthData, Tx } from '../../types'
@@ -75,20 +76,32 @@ function usageColor(pct: number): string {
 export function Budget({ months, plan, state, now, selectedMonth }: BudgetScreenProps) {
   const overrides = state.categoryOverrides
   const [query, setQuery] = useState('')
+  const budget = plan?.budget ?? null
+  const plannedSurplus = plan?.budgetTotals.surplus ?? null
 
-  // 6-mo avg source: category-bucket monthly series across ALL months
-  // (large topN so every bucket gets its own series, none rolled into
-  // 'other'), keyed by normLabel for lookup against budget-row category text.
-  const series = useMemo(() => categorySeries(months, overrides, Number.MAX_SAFE_INTEGER), [months, overrides])
-  const seriesByKey = useMemo(() => new Map(series.map((s) => [normLabel(s.category), s])), [series])
-
-  const sixMonthAvg = (category: string): number | null => {
-    const entry = seriesByKey.get(normLabel(category))
-    if (!entry) return null
-    const points = entry.points.filter((p) => p.tab !== selectedMonth.tab).slice(-6)
-    if (points.length === 0) return null
-    return round2(points.reduce((sum, p) => sum + p.value, 0) / points.length)
-  }
+  // 6-mo avg source: re-run budgetActuals() per month across the ≤6 months
+  // strictly BEFORE selectedMonth (never including or looking past it), sum
+  // each category's `actual` across that window, divide by the WINDOW
+  // LENGTH (a category silent in some months still averages down over the
+  // full window rather than only the months it appeared in).
+  const sixMonthAvgByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    if (!budget) return map
+    const selectedKey = selectedMonth.period.year * 12 + selectedMonth.period.month
+    const priorMonths = sortByPeriod(months)
+      .filter((m) => m.period.year * 12 + m.period.month < selectedKey)
+      .slice(-6)
+    if (priorMonths.length === 0) return map
+    const sums = new Map<string, number>()
+    for (const m of priorMonths) {
+      const v = budgetActuals(m, budget, overrides, now, plannedSurplus)
+      for (const row of v.rows) sums.set(row.category, (sums.get(row.category) ?? 0) + row.actual)
+      for (const u of v.unbudgeted) sums.set(u.category, (sums.get(u.category) ?? 0) + u.actual)
+    }
+    const windowLen = priorMonths.length
+    for (const [category, sum] of sums) map.set(category, round2(sum / windowLen))
+    return map
+  }, [months, budget, overrides, selectedMonth.tab])
 
   if (!plan) {
     return (
@@ -141,7 +154,7 @@ export function Budget({ months, plan, state, now, selectedMonth }: BudgetScreen
             </div>
             {view.rows.map((row) => {
               const left = round2(row.plannedMonthly - row.actual)
-              const avg = sixMonthAvg(row.category)
+              const avg = sixMonthAvgByCategory.get(row.category) ?? null
               const isFoodHome = normLabel(row.category) === FOOD_HOME_LABEL
               return (
                 <Fragment key={row.category}>
@@ -173,7 +186,7 @@ export function Budget({ months, plan, state, now, selectedMonth }: BudgetScreen
               )
             })}
             {view.unbudgeted.map((u) => {
-              const avg = sixMonthAvg(u.category)
+              const avg = sixMonthAvgByCategory.get(u.category) ?? null
               return (
                 <div className="dg-row" style={{ gridTemplateColumns: BUDGET_COLS }} key={`unbudgeted-${u.category}`}>
                   <span>{u.category}</span>
@@ -224,31 +237,35 @@ export function Budget({ months, plan, state, now, selectedMonth }: BudgetScreen
         </div>
         {allItems.length === 0 ? (
           <EmptyState message="No expenses recorded this month." />
+        ) : filteredItems.length === 0 ? (
+          <EmptyState message={`No line items match "${query}".`} />
         ) : (
-          <div className="dg-body-scroll">
+          <>
             <div className="dg-cols" style={{ gridTemplateColumns: ITEMS_COLS }}>
               <span>Label</span>
               <span>Category</span>
               <span className="right">Amount</span>
             </div>
-            {filteredItems.map((tx) => {
-              const cat = categorize(tx.normLabel, overrides)
-              const dim = tx.planned || tx.amountEUR == null
-              return (
-                <div
-                  key={`${tx.tab}-${tx.row}-${tx.label}`}
-                  className={dim ? 'dg-row muted' : 'dg-row'}
-                  style={{ gridTemplateColumns: ITEMS_COLS }}
-                >
-                  <span>{tx.label}</span>
-                  <span>{cat}</span>
-                  <span className="right">
-                    <Money amountEUR={tx.amountEUR} tabular />
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+            <div className="dg-body-scroll">
+              {filteredItems.map((tx) => {
+                const cat = categorize(tx.normLabel, overrides)
+                const dim = tx.planned || tx.amountEUR == null
+                return (
+                  <div
+                    key={`${tx.tab}-${tx.row}-${tx.label}`}
+                    className={dim ? 'dg-row muted' : 'dg-row'}
+                    style={{ gridTemplateColumns: ITEMS_COLS }}
+                  >
+                    <span>{tx.label}</span>
+                    <span>{cat}</span>
+                    <span className="right">
+                      <Money amountEUR={tx.amountEUR} tabular />
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>
