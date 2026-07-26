@@ -9,3 +9,15 @@ it('miss → uncategorized', () => expect(categorize('zzz-unknown')).toBe('uncat
 it('seed covers top labels', () => {
   for (const l of ['rent', 'church', 'petrol', 'salary', 'sachin']) expect(SEED_CATEGORIES[l]).toBeDefined()
 })
+
+it('aliases the "Advancia" typo to "advanzia"', () => expect(normLabel('Advancia')).toBe('advanzia'))
+it('aliasing is case/whitespace-insensitive', () => expect(normLabel('  ADVANCIA  ')).toBe('advanzia'))
+it('leaves the correct spelling untouched', () => expect(normLabel('Advanzia')).toBe('advanzia'))
+
+it('seeds the credit card category for amex, sparkasse, advanzia', () => {
+  for (const l of ['amex', 'sparkasse', 'advanzia']) expect(SEED_CATEGORIES[l]).toBe('credit card')
+})
+
+it('the Advancia typo categorizes as credit card via the alias', () => {
+  expect(categorize(normLabel('Advancia'))).toBe('credit card')
+})

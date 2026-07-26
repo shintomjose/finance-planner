@@ -149,7 +149,7 @@ interface ScreenEntry {
 
 const overviewComponent = lazy(async () => {
   const { Overview } = await import('../Overview')
-  return { default: (p: ScreenProps) => <Overview months={p.months} now={p.now} /> }
+  return { default: (p: ScreenProps) => <Overview months={p.months} now={p.now} appState={p.appState} /> }
 })
 
 const healthComponent = lazy(async () => {

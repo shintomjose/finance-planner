@@ -64,7 +64,9 @@ Domain model (spec §4): `Transaction`, `MonthSummary`, `Budget`,
   App recomputes its own carryover chain and reports drift vs sheet values.
 - **Category normalization is case-insensitive** (`Enbw`=`EnBW`, `rewe`=`Rewe`)
   and then runs through the user-editable category map (seed list in
-  workbook-map.md §Labels).
+  workbook-map.md §Labels). An aliases map (`normalize.ts`) merges owner typo
+  variants after basic normalization (`advancia`→`advanzia`); credit-card
+  category = amex/sparkasse/advanzia.
 - Blank expense amount (D empty) = planned/unpaid → flag `planned`, not zero.
 - **`Food Home` in the Upcoming block is the monthly food-budget tracker:**
   N = budget (700), O (to-pay) = remaining budget this month — not a payable
