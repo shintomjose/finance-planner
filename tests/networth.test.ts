@@ -32,7 +32,7 @@ const upstocksSnapshot = (overrides: Partial<InvestmentSnapshot> = {}): Investme
 const plan = (upstocks: InvestmentSnapshot[] = [], projection?: Partial<MonthlyPlanData['projection']>): MonthlyPlanData => ({
   budget: [],
   budgetTotals: { income: null, expense: null, surplus: null },
-  loan: { principal: null, installments: [], paidToDate: null },
+  loan: { principal: null, termMonths: null, interestEUR: null, totalEUR: null, monthlyEUR: null, installments: [], paidToDate: null },
   savingsSnapshots: [],
   projection: { ratePct: null, yearlyContribution: null, rows: [], ...projection },
   sbiLife: [],
