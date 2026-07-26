@@ -72,7 +72,7 @@ function PetrolPanel({ logs }: { logs: LogEntry[] }) {
                 <td>
                   <Money amountEUR={typeof e.fields.amountEUR === 'number' ? e.fields.amountEUR : null} tabular />
                 </td>
-                <td>{typeof e.fields.perLitre === 'number' ? `€${e.fields.perLitre.toFixed(2)}` : '–'}</td>
+                <td className="num">{typeof e.fields.perLitre === 'number' ? `€${e.fields.perLitre.toFixed(2)}` : '–'}</td>
                 <td>{fmtNum(e.fields.km)}</td>
               </tr>
             ))}

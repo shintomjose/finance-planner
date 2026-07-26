@@ -40,7 +40,7 @@ export function Money({ amountEUR, amountINR, mode = 'EUR', fxRate, tabular }: M
   const cls = tabular ? 'money money-tabular' : 'money'
 
   if (mode === 'INR') {
-    if (amountINR == null) return <span className="money money-dash">–</span>
+    if (amountINR == null) return <span className="money money-dash">—</span>
     const eur = fxRate != null && Number.isFinite(fxRate) && fxRate !== 0 ? amountINR / fxRate : null
     return (
       <span className={cls}>
@@ -50,7 +50,7 @@ export function Money({ amountEUR, amountINR, mode = 'EUR', fxRate, tabular }: M
     )
   }
 
-  if (amountEUR == null) return <span className="money money-dash">–</span>
+  if (amountEUR == null) return <span className="money money-dash">—</span>
   const inr = fxRate != null && Number.isFinite(fxRate) ? amountEUR * fxRate : null
   return (
     <span className={cls}>
@@ -75,8 +75,12 @@ export interface StatCardProps {
 export function StatCard({ label, value, sub, tone = 'neutral', trend }: StatCardProps) {
   return (
     <div className="stat-card" data-tone={tone}>
-      <div className="stat-card-label">{label}</div>
-      <div className="stat-card-value">{value}</div>
+      {/* `kicker` (template redesign, Task 10): same small-caps meta-label
+          treatment as KpiCardView's label and the panel2-meta counts —
+          StatCard's tiles now read as the same family of tile as the
+          global KPI row instead of the old dedicated stat-card-label look. */}
+      <div className="kicker">{label}</div>
+      <div className="stat-card-value num">{value}</div>
       {sub && <div className="stat-card-sub">{sub}</div>}
       {trend && <div className="stat-card-trend">{trend}</div>}
     </div>
@@ -93,6 +97,18 @@ export interface SectionProps {
   children: ReactNode
 }
 
+/** Deliberately NOT wrapped in `.panel2`'s bordered-card chrome (Task 10
+ * reskin pass): app.css's own typography note ("a warm serif carries the
+ * ledger identity — headings, section titles") means Section's job is a
+ * page-level heading + content grouping, not a dashboard tile — the six
+ * screens that use it (NetWorth/Sachin/Trips/Logs/Goals/ParserHealth) each
+ * stack several Sections top-to-bottom, so boxing every one would nest a
+ * border around StatCard's own bordered tiles and double up the chrome
+ * for no visual gain (the global KPI row already establishes "small
+ * bordered tile on plain background" as the template's stat-tile
+ * convention, with no further panel2 wrapper around it either). Section
+ * still inherits the template look through tokens (fonts/colors already
+ * flow through the CSS variable remap) without changing shape. */
 export function Section({ title, actions, className, children }: SectionProps) {
   return (
     <section className={className ? `section ${className}` : 'section'}>
@@ -115,19 +131,24 @@ export interface PanelProps {
   children: ReactNode
 }
 
-/** Dashboard-grid building block (Overview redesign): a bordered card with
- * a header that never scrolls and a body that scrolls internally
- * (`overflow-y: auto`) once its container gets a bounded height — see
- * `.panel` / `.panel-head` / `.panel-body` in app.css. Kept here (not
- * local to Overview.tsx) because the pattern is generically useful for any
- * screen that wants a fixed-height scrollable card. */
+/** Dashboard-grid building block: a bordered card with a header that never
+ * scrolls and a body that scrolls internally (`overflow-y: auto`) once its
+ * container gets a bounded height — see `.panel2` / `.panel2-head` /
+ * `.panel2-body` in app.css. Kept here (not local to Overview.tsx) because
+ * the pattern is generically useful for any screen that wants a
+ * fixed-height scrollable card. No screen instantiates `Panel` today —
+ * Overview/Budget/Trends all lay out their own `.panel2` markup directly
+ * instead of going through this component — but it now shares the same
+ * `.panel2`/`.panel2-head` chrome those screens use (Task 10 reskin) rather
+ * than the old pre-redesign `.panel`/`.panel-head` look, so any future
+ * caller gets the current template for free. */
 export function Panel({ title, className, children }: PanelProps) {
   return (
-    <div className={className ? `panel ${className}` : 'panel'}>
-      <div className="panel-head">
-        <h3 className="panel-title">{title}</h3>
+    <div className={className ? `panel2 ${className}` : 'panel2'}>
+      <div className="panel2-head">
+        <span>{title}</span>
       </div>
-      <div className="panel-body">{children}</div>
+      <div className="panel2-body">{children}</div>
     </div>
   )
 }
