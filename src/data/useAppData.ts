@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getToken, initAuth, signIn, silentReauth } from '../api/gis'
 import { AuthExpiredError, SheetsClient } from '../api/sheets'
+import { clearCache } from '../cache/db'
 import { loadWithSilentReauth } from '../lib/authRetry'
 import { parseBinance } from '../parse/binance'
 import type { BinanceData } from '../parse/binance'
@@ -134,6 +135,11 @@ export interface UseAppDataResult {
   /** Re-run the full load. If there's no live token, this signs in
    * interactively instead (mirrors the old App.tsx `retry`). */
   retry: () => void
+  /** Hard refresh: wipe the whole IndexedDB cache, then re-run the full
+   * load so EVERY tab refetches — the only way sheet edits to historical
+   * months (immutable in cache) or within-TTL live tabs become visible
+   * without waiting. No live token -> interactive sign-in, like `retry`. */
+  refresh: () => void
   appState: AppState
   onStateChange: (next: AppState) => void
 }
@@ -201,10 +207,28 @@ export function useAppData(now: Date): UseAppDataResult {
     else signIn()
   }, [load])
 
+  const refresh = useCallback(() => {
+    void (async () => {
+      // Clear FIRST, even on the no-token path — the user pressed hard
+      // refresh, so the load that follows the interactive sign-in must not
+      // serve the stale cache either (reviewer, 2026-07-27). Best-effort: a
+      // failed clear (private-browsing block, etc.) must not kill the
+      // refresh — the load still refetches whatever the freshness policy
+      // allows, which is strictly better than doing nothing.
+      try {
+        await clearCache()
+      } catch {
+        /* proceed with whatever cache state remains */
+      }
+      if (getToken()) await load()
+      else signIn()
+    })()
+  }, [load])
+
   const onStateChange = useCallback((next: AppState) => {
     saveState(next)
     setAppState(next)
   }, [])
 
-  return { state, retry, appState, onStateChange }
+  return { state, retry, refresh, appState, onStateChange }
 }

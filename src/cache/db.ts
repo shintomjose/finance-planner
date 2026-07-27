@@ -97,3 +97,21 @@ export async function putCached<T = MonthGrids>(
     tx.onabort = () => reject(tx.error)
   })
 }
+
+/** Wipes every cached entry (month grids + special tabs) so the next load
+ * refetches everything from the network — the header refresh button's escape
+ * hatch for sheet edits the freshness policy would otherwise never pick up
+ * (historical tabs are immutable, live tabs sit behind LIVE_TTL_MS). Clears
+ * the store rather than deleting the whole database: the shared connection
+ * stays open for the app's lifetime, and deleteDatabase would block until
+ * it closed. */
+export async function clearCache(): Promise<void> {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    tx.objectStore(STORE_NAME).clear()
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
+}
