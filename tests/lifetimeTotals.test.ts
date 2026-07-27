@@ -46,10 +46,20 @@ describe('lifetimeTotals', () => {
     expect(t.householdAvgEUR).toBe(366.67) // 1100 / 3, round2
   })
 
-  it('empty months → zero totals, null average', () => {
+  it('empty months → zero totals, null average, null extremes', () => {
     const t = lifetimeTotals([])
     expect(t.totalEUR).toBe(0)
     expect(t.householdAvgEUR).toBeNull()
+    expect(t.householdLow).toBeNull()
+    expect(t.householdHigh).toBeNull()
+  })
+
+  it('household low/high pick the cheapest and priciest POSITIVE months — 0-data months never win lowest', () => {
+    const mk = (tab: string, mo: number, household: number | null) =>
+      month(tab, [], { period: { year: 2025, month: mo }, summary: { totalIncome: null, totalExpense: null, balance: null, household } })
+    const t = lifetimeTotals([mk('A', 1, 600), mk('B', 2, null), mk('C', 3, 350.5), mk('D', 4, 900)])
+    expect(t.householdLow).toEqual({ tab: 'C', period: { year: 2025, month: 3 }, amountEUR: 350.5 })
+    expect(t.householdHigh).toEqual({ tab: 'D', period: { year: 2025, month: 4 }, amountEUR: 900 })
   })
 
   it('null amounts (planned rows) contribute nothing', () => {

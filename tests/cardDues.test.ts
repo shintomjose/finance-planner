@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardDues, duesTotal, isCardStatementUpcoming, isDueCoveredUpcoming } from '../src/lib/cardDues'
+import { cardDues, duesTotal, isDueCoveredUpcoming } from '../src/lib/cardDues'
 import { normLabel } from '../src/lib/normalize'
 import type { MonthData, ScratchEntry, Tx } from '../src/types'
 
@@ -76,35 +76,29 @@ describe('cardDues', () => {
   })
 })
 
-describe('isCardStatementUpcoming', () => {
-  it('drops the statement rows', () => {
-    expect(isCardStatementUpcoming('Advancia Credit Card')).toBe(true)
-    expect(isCardStatementUpcoming('Amazon CC')).toBe(true) // alias → sparkasse
-    expect(isCardStatementUpcoming('Amex')).toBe(true)
-    expect(isCardStatementUpcoming('Advanzia')).toBe(true)
-  })
-
-  it('keeps real bills that merely mention a card/provider', () => {
-    expect(isCardStatementUpcoming('Amex Netto')).toBe(false)
-    expect(isCardStatementUpcoming('Advanzia Add')).toBe(false)
-    expect(isCardStatementUpcoming('Sparkasse Interest')).toBe(false)
-    expect(isCardStatementUpcoming('Amazon Prime')).toBe(false)
-    expect(isCardStatementUpcoming('Rent')).toBe(false)
-    expect(isCardStatementUpcoming('Food Home')).toBe(false)
-  })
-
-  it('"Amazon Bill" (FIXED service label) and "ICICI BILL" are never treated as card statements', () => {
-    expect(isCardStatementUpcoming('Amazon Bill')).toBe(false)
-    expect(isCardStatementUpcoming('ICICI BILL')).toBe(false)
-  })
-})
-
 describe('isDueCoveredUpcoming', () => {
-  it('drops the bare Sachin row (duplicates the computed due) plus all statement rows', () => {
+  it('drops EVERY card-charged row — the statement dues already include all pending charges (owner)', () => {
+    expect(isDueCoveredUpcoming('Advancia Credit Card')).toBe(true)
+    expect(isDueCoveredUpcoming('Amazon CC')).toBe(true) // alias → sparkasse
+    expect(isDueCoveredUpcoming('Amex')).toBe(true)
+    expect(isDueCoveredUpcoming('Advanzia')).toBe(true)
+    expect(isDueCoveredUpcoming('Amex Netto')).toBe(true)
+    expect(isDueCoveredUpcoming('Advanzia Add')).toBe(true)
+    expect(isDueCoveredUpcoming('Sparkasse Interest')).toBe(true)
+    expect(isDueCoveredUpcoming('Amazon Prime')).toBe(true)
+    expect(isDueCoveredUpcoming('Amazon Bill')).toBe(true)
+  })
+
+  it('drops the bare Sachin row (income expectation, not an expense)', () => {
     expect(isDueCoveredUpcoming('Sachin')).toBe(true)
     expect(isDueCoveredUpcoming('SACHIN')).toBe(true)
-    expect(isDueCoveredUpcoming('Amazon CC')).toBe(true)
     expect(isDueCoveredUpcoming('Sachin swe')).toBe(false) // extra words = a different row
+  })
+
+  it('keeps genuine non-card bills', () => {
     expect(isDueCoveredUpcoming('Rent')).toBe(false)
+    expect(isDueCoveredUpcoming('Food Home')).toBe(false)
+    expect(isDueCoveredUpcoming('Commerzbank EMI')).toBe(false)
+    expect(isDueCoveredUpcoming('ICICI BILL')).toBe(false)
   })
 })

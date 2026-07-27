@@ -1538,6 +1538,10 @@ tr[data-drift='true'] td {
 .dues-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dues-note { font-size: 10.5px; color: var(--muted); }
 
+/* Savings-progress month labels must never wrap into two lines (owner:
+   "months are overflown") — the column is sized to fit "Feb '26" whole. */
+.month-label { white-space: nowrap; }
+
 /* Column dividers for the datagrid detail sections (owner request
    2026-07-27): a hairline before every column except the first. The 10px
    dot column is exempted via :nth-child(2) — a rule 10px after the panel

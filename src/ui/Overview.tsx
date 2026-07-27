@@ -70,7 +70,7 @@ const fmtEUR = (v: number) => eurFmt.format(v)
 const inrFmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const monthLabel = (m: MonthData) => `${MONTH_ABBR[m.period.month - 1]} '${String(m.period.year % 100).padStart(2, '0')}`
+const monthLabel = (m: Pick<MonthData, 'period'>) => `${MONTH_ABBR[m.period.month - 1]} '${String(m.period.year % 100).padStart(2, '0')}`
 
 interface CategoryRow {
   category: string
@@ -83,7 +83,7 @@ interface CategoryRow {
 const CAT_COLS = '10px minmax(0, 1fr) 48px 96px 92px 80px 84px'
 const DUES_COLS = '1fr 110px'
 const INCOME_COLS = '1fr 40px 100px 88px'
-const SAVINGS_COLS = '58px 1fr 92px 48px'
+const SAVINGS_COLS = '72px minmax(40px, 1fr) 96px 44px'
 const BANK_COLS = '1fr 88px'
 const UPCOMING_COLS = '1fr 40px 88px'
 
@@ -292,6 +292,17 @@ export function Overview({
           <div className="hero-note num">
             {fmtEUR(lifetime.householdTotalEUR)} across {lifetime.monthCount} months
           </div>
+          {lifetime.householdLow && lifetime.householdHigh && (
+            <div className="hero-note num">
+              <span style={{ color: 'var(--green)' }}>
+                low {monthLabel(lifetime.householdLow)} {fmtEUR(lifetime.householdLow.amountEUR)}
+              </span>
+              {' · '}
+              <span style={{ color: 'var(--red)' }}>
+                high {monthLabel(lifetime.householdHigh)} {fmtEUR(lifetime.householdHigh.amountEUR)}
+              </span>
+            </div>
+          )}
         </div>
         {/* Owner 2026-07-27: the old "Credit card bills" panel confused —
             it is simply the card PAYMENTS booked this month. Reframed as a
@@ -377,6 +388,39 @@ export function Overview({
           )}
         </div>
 
+        {/* Upcoming income (owner 2026-07-27, moved below Income sources
+            same day): expected inflows — Salary, KG/EG, money owed to him
+            (Sachin, Cris, …) — read from the K/L forecast block the owner
+            curates in the sheet. */}
+        <div className="panel2" data-tint="green">
+          <div className="panel2-head">
+            <span>Upcoming income</span>
+            <span className="panel2-meta">{expectedIncome ? `${expectedIncome.items.length} sources` : 'no forecast block'}</span>
+          </div>
+          {expectedIncome == null ? (
+            <EmptyState message="No K/L forecast block found in this month's tab." />
+          ) : expectedIncome.items.length === 0 ? (
+            <EmptyState message="Nothing expected right now — fill the forecast rows (Salary, KG+EG, Sachin…) in the sheet." />
+          ) : (
+            <>
+              {expectedIncome.items.map((item, idx) => (
+                <div className="dg-row" style={{ gridTemplateColumns: BANK_COLS }} key={`${item.label}-${idx}`}>
+                  <span>{item.label}</span>
+                  <span className="right">
+                    <Money amountEUR={item.amountEUR} tabular />
+                  </span>
+                </div>
+              ))}
+              <div className="dg-foot" style={{ gridTemplateColumns: BANK_COLS }}>
+                <span>Total expected</span>
+                <span className="right">
+                  <Money amountEUR={expectedIncome.total} tabular />
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="panel2" data-tint="blue">
           <div className="panel2-head">
             <span>Savings progress</span>
@@ -400,7 +444,7 @@ export function Overview({
                       : 'var(--red)'
                 return (
                   <div className="dg-row" style={{ gridTemplateColumns: SAVINGS_COLS }} key={p.tab}>
-                    <span className="num">{p.label}</span>
+                    <span className="num month-label">{p.label}</span>
                     <BarMeter pct={pct} color={color} />
                     <span className="right" style={{ color }}>
                       {p.saved >= 0 && '+'}
@@ -411,7 +455,7 @@ export function Overview({
                 )
               })}
               <div className="dg-foot" style={{ gridTemplateColumns: SAVINGS_COLS }}>
-                <span>Saved in last 6 months</span>
+                <span className="month-label">Saved (6 mo)</span>
                 <span />
                 <span className="right">
                   <Money amountEUR={totalSaved6} tabular />
@@ -636,37 +680,6 @@ export function Overview({
           )}
         </div>
 
-        {/* Upcoming income (owner 2026-07-27): expected inflows — Salary,
-            KG/EG, money owed to him (Sachin, Cris, …) — read from the K/L
-            forecast block the owner curates in the sheet. */}
-        <div className="panel2" data-tint="green">
-          <div className="panel2-head">
-            <span>Upcoming income</span>
-            <span className="panel2-meta">{expectedIncome ? `${expectedIncome.items.length} sources` : 'no forecast block'}</span>
-          </div>
-          {expectedIncome == null ? (
-            <EmptyState message="No K/L forecast block found in this month's tab." />
-          ) : expectedIncome.items.length === 0 ? (
-            <EmptyState message="Nothing expected right now — fill the forecast rows (Salary, KG+EG, Sachin…) in the sheet." />
-          ) : (
-            <>
-              {expectedIncome.items.map((item, idx) => (
-                <div className="dg-row" style={{ gridTemplateColumns: BANK_COLS }} key={`${item.label}-${idx}`}>
-                  <span>{item.label}</span>
-                  <span className="right">
-                    <Money amountEUR={item.amountEUR} tabular />
-                  </span>
-                </div>
-              ))}
-              <div className="dg-foot" style={{ gridTemplateColumns: BANK_COLS }}>
-                <span>Total expected</span>
-                <span className="right">
-                  <Money amountEUR={expectedIncome.total} tabular />
-                </span>
-              </div>
-            </>
-          )}
-        </div>
       </div>
       </div>
     </div>
