@@ -13,7 +13,11 @@
 //   Advanzia            = J14 "Current Advancia"   (paid: Σ 'advanzia' rows, note only)
 //   Amazon (Sparkasse)  = J13 "Current Amazon"     (paid: Σ 'sparkasse' rows, note only)
 //   Amex                = J17 "Amex"               (paid: Σ 'amex' rows, note only)
-//   Sachin              = L18 "SACHIN" − SACHIN!G132 (ledger remaining) − J18 "Sachin"
+//
+// The computed Sachin due was REMOVED entirely (owner 2026-07-27 latest:
+// formula was wrong; Sachin now lives on the income side — see
+// lib/upcomingIncome.ts). The bare "Sachin" M/N/O row stays dropped from
+// the bills list via isDueCoveredUpcoming below.
 //
 // A missing input makes the row's due null with a note naming what's
 // missing — never a fabricated 0.
@@ -21,7 +25,7 @@ import { round2 } from './mathUtils'
 import { normLabel } from './normalize'
 import type { MonthData, ScratchEntry, Tx } from '../types'
 
-export type CardDueKey = 'advanzia' | 'sparkasse' | 'amex' | 'sachin'
+export type CardDueKey = 'advanzia' | 'sparkasse' | 'amex'
 
 export interface CardDue {
   key: CardDueKey
@@ -63,44 +67,18 @@ function cardRow(key: CardDueKey, label: string, balance: number | null, paid: n
   return { key, label, due: round2(balance), note }
 }
 
-/**
- * The four owner-defined dues rows for one month. `sachinRemaining` is
- * `sachin.ledger.totals.remaining` (SACHIN!G132, read and trusted as-is —
- * see parse/sachin.ts) or null when the SACHIN tab is unavailable.
- */
-export function cardDues(month: MonthData, sachinRemaining: number | null): CardDue[] {
+/** The three owner-defined card-dues rows for one month. */
+export function cardDues(month: MonthData): CardDue[] {
   const scratch = month.scratch ?? []
   const advanziaBalance = findScratch(scratch, 'IJ', (n) => isAdvanzia(n) && n.includes('current'))
   const amazonBalance = findScratch(scratch, 'IJ', (n) => n.includes('amazon') && n.includes('current'))
   const amexBalance = findScratch(scratch, 'IJ', (n) => n === 'amex')
-  const sachinIJ = findScratch(scratch, 'IJ', (n) => n === 'sachin')
-  const sachinKL = findScratch(scratch, 'KL', (n) => n === 'sachin')
 
-  const rows: CardDue[] = [
+  return [
     cardRow('advanzia', 'Advanzia', advanziaBalance, paidTowards(month.expenses, 'advanzia'), 'Current Advanzia'),
     cardRow('sparkasse', 'Amazon (Sparkasse)', amazonBalance, paidTowards(month.expenses, 'sparkasse'), 'Current Amazon'),
     cardRow('amex', 'Amex', amexBalance, paidTowards(month.expenses, 'amex'), 'Amex'),
   ]
-
-  // Sachin: KL "SACHIN" − ledger remaining (G132) − IJ "Sachin". The note
-  // always spells out both subtrahends (owner: "always show in bracket how
-  // much is J18 and how much is SACHIN!G132") when the row computes.
-  const missing: string[] = []
-  if (sachinKL == null) missing.push('no "SACHIN" scratch figure this month')
-  if (sachinRemaining == null) missing.push('SACHIN ledger unavailable')
-  if (sachinIJ == null) missing.push('no "Sachin" bank-scratch figure this month')
-  if (missing.length > 0) {
-    rows.push({ key: 'sachin', label: 'Sachin', due: null, note: missing.join(' · ') })
-  } else {
-    rows.push({
-      key: 'sachin',
-      label: 'Sachin',
-      due: round2(sachinKL! - sachinRemaining! - sachinIJ!),
-      note: `${fmt(sachinKL!)} − ledger remaining ${fmt(sachinRemaining!)} − scratch ${fmt(sachinIJ!)}`,
-    })
-  }
-
-  return rows
 }
 
 /** Sum of the computable dues (null rows contribute nothing). */
@@ -117,9 +95,10 @@ export function duesTotal(rows: CardDue[]): number {
  * card name — so "Amex Netto", "Advanzia Add", "Sparkasse Interest",
  * "Amazon Prime" (extra meaningful words) all stay real bills.
  */
-/** Upcoming rows already represented by a computed due above the bills
- * list: card statement rows AND the bare "Sachin" row (owner 2026-07-27:
- * the M/N/O Sachin figure duplicates the computed Sachin due). */
+/** Upcoming rows that must never appear in the bills list: card statement
+ * rows (duplicated by the computed dues) AND the bare "Sachin" row (owner
+ * 2026-07-27: Sachin is money owed TO him — an income expectation, tracked
+ * in lib/upcomingIncome.ts — never an upcoming expense). */
 export function isDueCoveredUpcoming(name: string): boolean {
   return isCardStatementUpcoming(name) || normLabel(name) === 'sachin'
 }
