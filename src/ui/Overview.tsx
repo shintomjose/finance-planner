@@ -46,7 +46,7 @@
 //    standalone card; the rebuild's `categorize()` bucket "credit card"
 //    would otherwise fold these into the category panel's single row).
 import { useState } from 'react'
-import { cardDues, duesTotal, isCardStatementUpcoming } from '../lib/cardDues'
+import { cardDues, duesTotal, isDueCoveredUpcoming } from '../lib/cardDues'
 import { creditCardBills } from '../lib/creditCardBills'
 import { partitionUpcoming } from '../lib/foodHome'
 import { groupIncome } from '../lib/incomeGroups'
@@ -85,7 +85,6 @@ const INCOME_COLS = '1fr 40px 100px 88px'
 const SAVINGS_COLS = '58px 1fr 92px 48px'
 const BANK_COLS = '1fr 88px'
 const UPCOMING_COLS = '1fr 40px 88px'
-const CARD_COLS = '1fr 88px'
 
 /** Desc-by-amount comparator that treats a null amount (planned/blank D
  * column) as "sorts last", with a stable 0 when BOTH sides are null —
@@ -246,7 +245,7 @@ export function Overview({
   // entirely; hasAnyDue below still keys the coverage-note suppression.
   const showDues = (selectedMonth.scratch ?? []).length > 0
   const { bills: allBills, foodHomeRemaining } = partitionUpcoming(selectedMonth.upcoming)
-  const bills = allBills.filter((u) => !isCardStatementUpcoming(u.name))
+  const bills = allBills.filter((u) => !isDueCoveredUpcoming(u.name))
   const billsTotal = round2(bills.reduce((s, u) => s + (u.toPay ?? 0), 0))
   const toPayTotal = round2(duesSum + billsTotal)
   const coverage = round2(bankTotal - toPayTotal)
@@ -294,6 +293,18 @@ export function Overview({
             {fmtEUR(lifetime.householdTotalEUR)} across {lifetime.monthCount} months
           </div>
         </div>
+        {/* Owner 2026-07-27: the old "Credit card bills" panel confused —
+            it is simply the card PAYMENTS booked this month. Reframed as a
+            small hero tile. */}
+        <div className="hero-cell">
+          <div className="kicker">Card payments this month</div>
+          <div className="hero-value num">
+            <Money amountEUR={cardTotal} tabular />
+          </div>
+          <div className="hero-note num">
+            {cardRows.length === 0 ? 'no card payments booked yet' : cardRows.map((r) => `${r.label} ${fmtEUR(r.amountEUR)}`).join(' · ')}
+          </div>
+        </div>
       </div>
 
       <div className="overview-grid">
@@ -301,7 +312,7 @@ export function Overview({
           progress — this col-stack rendered after the category panel before
           2026-07-27; markup unchanged, order swapped. */}
       <div className="col-stack">
-        <div className="panel2">
+        <div className="panel2" data-tint="green">
           <div className="panel2-head">
             <span>Income sources</span>
             <span className="panel2-meta">{incomeGroups.length} sources</span>
@@ -366,7 +377,7 @@ export function Overview({
           )}
         </div>
 
-        <div className="panel2">
+        <div className="panel2" data-tint="blue">
           <div className="panel2-head">
             <span>Savings progress</span>
             <span className="panel2-meta">{target != null ? `target ${fmtEUR(target)}` : 'no target'}</span>
@@ -413,7 +424,7 @@ export function Overview({
       </div>
 
       {/* Column 2: Expenses by category */}
-      <div className="panel2">
+      <div className="panel2" data-tint="red">
         <div className="panel2-head">
           <span>Expenses by category</span>
           <span className="panel2-meta">
@@ -504,7 +515,7 @@ export function Overview({
 
       {/* Column 3: Bank accounts + Upcoming to pay */}
       <div className="col-stack">
-        <div className="panel2">
+        <div className="panel2" data-tint="green">
           <div className="panel2-head">
             <span>Bank accounts</span>
             <span className="panel2-meta">{selectedMonth.banks.length} accounts</span>
@@ -531,7 +542,7 @@ export function Overview({
           )}
         </div>
 
-        <div className="panel2" data-tone={coverage < 0 ? 'bad' : undefined}>
+        <div className="panel2" data-tint="amber" data-tone={coverage < 0 ? 'bad' : undefined}>
           <div className="panel2-head">
             <span>Upcoming to pay</span>
             <span className="panel2-meta">{bills.length} bills</span>
@@ -622,27 +633,6 @@ export function Overview({
                 </span>
               </div>
             </>
-          )}
-        </div>
-
-        <div className="panel2">
-          <div className="panel2-head">
-            <span>Credit card bills</span>
-            <span className="panel2-meta">
-              <Money amountEUR={cardTotal} tabular />
-            </span>
-          </div>
-          {cardRows.length === 0 ? (
-            <EmptyState message="No credit card bills this month." />
-          ) : (
-            cardRows.map((r) => (
-              <div className="dg-row" style={{ gridTemplateColumns: CARD_COLS }} key={r.label}>
-                <span>{r.label}</span>
-                <span className="right num">
-                  <Money amountEUR={r.amountEUR} tabular />
-                </span>
-              </div>
-            ))
           )}
         </div>
       </div>

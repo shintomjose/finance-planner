@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardDues, duesTotal, isCardStatementUpcoming } from '../src/lib/cardDues'
+import { cardDues, duesTotal, isCardStatementUpcoming, isDueCoveredUpcoming } from '../src/lib/cardDues'
 import { normLabel } from '../src/lib/normalize'
 import type { MonthData, ScratchEntry, Tx } from '../src/types'
 
@@ -33,13 +33,14 @@ const SCRATCH: ScratchEntry[] = [
 ]
 
 describe('cardDues', () => {
-  it('computes the four owner formulas from a JUL_26-shaped month', () => {
+  it('card dues = scratch balances AS-IS (owner: payments already deducted in the sheet); payments are note-only', () => {
     const m = month(SCRATCH, [tx('Advancia CC', 400), tx('Amazon CC', 50), tx('Amex CC', 300)])
     const dues = cardDues(m, 100) // pretend SACHIN!G132 = 100
-    expect(dues.find((d) => d.key === 'advanzia')!.due).toBe(1100.75) // 1500.75 − 400
-    expect(dues.find((d) => d.key === 'sparkasse')!.due).toBe(270.5) // 320.5 − 50
-    expect(dues.find((d) => d.key === 'amex')!.due).toBe(-89.6) // 210.4 − 300, negative allowed
-    expect(dues.find((d) => d.key === 'sachin')!.due).toBe(720.35) // 900.6 − 100 − 80.25
+    expect(dues.find((d) => d.key === 'advanzia')!.due).toBe(1500.75) // J14 as-is, NOT minus 400
+    expect(dues.find((d) => d.key === 'sparkasse')!.due).toBe(320.5)
+    expect(dues.find((d) => d.key === 'amex')!.due).toBe(210.4)
+    expect(dues.find((d) => d.key === 'advanzia')!.note).toContain('400,00') // paid shown as a line
+    expect(dues.find((d) => d.key === 'sachin')!.due).toBe(720.35) // 900.6 − 100 − 80.25 (Sachin formula unchanged)
   })
 
   it('sachin note always spells out both subtrahends (owner bracket rule)', () => {
@@ -58,7 +59,7 @@ describe('cardDues', () => {
     expect(dues.find((d) => d.key === 'sachin')!.note).toContain('SACHIN ledger unavailable')
   })
 
-  it('no payment row yet → full statement due', () => {
+  it('no payment row yet → balance due with a "nothing paid" note', () => {
     const dues = cardDues(month(SCRATCH), 0)
     expect(dues.find((d) => d.key === 'advanzia')!.due).toBe(1500.75)
     expect(dues.find((d) => d.key === 'advanzia')!.note).toContain('nothing paid')
@@ -69,9 +70,11 @@ describe('cardDues', () => {
     expect(dues.find((d) => d.key === 'amex')!.due).toBeNull()
   })
 
-  it('multiple payment rows for one card are summed', () => {
+  it('multiple payment rows for one card are summed in the note (due untouched)', () => {
     const m = month(SCRATCH, [tx('Advancia CC', 1000), tx('Advanzia', 200)])
-    expect(cardDues(m, 0).find((d) => d.key === 'advanzia')!.due).toBe(300.75) // 1500.75 − 1200
+    const row = cardDues(m, 0).find((d) => d.key === 'advanzia')!
+    expect(row.due).toBe(1500.75)
+    expect(row.note).toContain('1.200,00')
   })
 
   it('duesTotal ignores null rows', () => {
@@ -100,5 +103,15 @@ describe('isCardStatementUpcoming', () => {
   it('"Amazon Bill" (FIXED service label) and "ICICI BILL" are never treated as card statements', () => {
     expect(isCardStatementUpcoming('Amazon Bill')).toBe(false)
     expect(isCardStatementUpcoming('ICICI BILL')).toBe(false)
+  })
+})
+
+describe('isDueCoveredUpcoming', () => {
+  it('drops the bare Sachin row (duplicates the computed due) plus all statement rows', () => {
+    expect(isDueCoveredUpcoming('Sachin')).toBe(true)
+    expect(isDueCoveredUpcoming('SACHIN')).toBe(true)
+    expect(isDueCoveredUpcoming('Amazon CC')).toBe(true)
+    expect(isDueCoveredUpcoming('Sachin swe')).toBe(false) // extra words = a different row
+    expect(isDueCoveredUpcoming('Rent')).toBe(false)
   })
 })

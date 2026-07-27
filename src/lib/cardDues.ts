@@ -5,15 +5,18 @@
 // this month (expense rows for that card). Cell refs in comments document
 // the live JUL_26 layout only — every lookup is label-based.
 //
-// Owner formulas (JUL_26 reference):
-//   Advanzia            = J14 "Current Advancia" − D6  "Advancia CC"
-//   Amazon (Sparkasse)  = J13 "Current Amazon"   − D15 "Amazon CC"
-//   Amex                = J17 "Amex"             − D19 "Amex CC"
+// Owner formulas (JUL_26 reference; revised 2026-07-27 late — owner: "I
+// already deduct the paid amount in Advanzia and for Amex and Sparkasse",
+// i.e. the sheet's Current-X scratch figures are ALREADY net of this
+// month's payments, so the card dues are the scratch balances alone; the
+// payment sum is informational only, shown in the row note):
+//   Advanzia            = J14 "Current Advancia"   (paid: Σ 'advanzia' rows, note only)
+//   Amazon (Sparkasse)  = J13 "Current Amazon"     (paid: Σ 'sparkasse' rows, note only)
+//   Amex                = J17 "Amex"               (paid: Σ 'amex' rows, note only)
 //   Sachin              = L18 "SACHIN" − SACHIN!G132 (ledger remaining) − J18 "Sachin"
 //
 // A missing input makes the row's due null with a note naming what's
-// missing — never a fabricated 0. No clamping: Amex can legitimately go
-// negative (paid more than the current statement).
+// missing — never a fabricated 0.
 import { round2 } from './mathUtils'
 import { normLabel } from './normalize'
 import type { MonthData, ScratchEntry, Tx } from '../types'
@@ -54,9 +57,10 @@ function cardRow(key: CardDueKey, label: string, balance: number | null, paid: n
   if (balance == null) {
     return { key, label, due: null, note: `no "${balanceName}" scratch figure this month` }
   }
-  const due = round2(balance - paid)
-  const note = paid !== 0 ? `${fmt(balance)} statement − ${fmt(paid)} paid` : `${fmt(balance)} statement, nothing paid yet`
-  return { key, label, due, note }
+  // The scratch balance is already net of payments (owner) — `paid` is a
+  // display-only line, never subtracted.
+  const note = paid !== 0 ? `${fmt(paid)} paid this month (already reflected)` : 'nothing paid yet this month'
+  return { key, label, due: round2(balance), note }
 }
 
 /**
@@ -113,6 +117,13 @@ export function duesTotal(rows: CardDue[]): number {
  * card name — so "Amex Netto", "Advanzia Add", "Sparkasse Interest",
  * "Amazon Prime" (extra meaningful words) all stay real bills.
  */
+/** Upcoming rows already represented by a computed due above the bills
+ * list: card statement rows AND the bare "Sachin" row (owner 2026-07-27:
+ * the M/N/O Sachin figure duplicates the computed Sachin due). */
+export function isDueCoveredUpcoming(name: string): boolean {
+  return isCardStatementUpcoming(name) || normLabel(name) === 'sachin'
+}
+
 export function isCardStatementUpcoming(name: string): boolean {
   // 'bill' is deliberately NOT a strip word: "Amazon Bill" is the
   // frequency-34 FIXED label (normalize.ts seed — a recurring service bill,
