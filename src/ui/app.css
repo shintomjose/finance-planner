@@ -1507,17 +1507,21 @@ tr[data-drift='true'] td {
 .dg-row { display: grid; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border-row); }
 .dg-row.clickable { cursor: pointer; }
 .dg-row.clickable:hover { background: var(--surface-2); }
-.dg-inset { background: var(--surface-2); border-bottom: 1px solid var(--border-row); padding: 6px 14px 10px 32px; }
+/* Wider padding + readable size — owner 2026-07-27: expanded category
+   items were too small to read. */
+.dg-inset { background: var(--surface-2); border-bottom: 1px solid var(--border-row); padding: 8px 16px 12px 30px; }
 .dg-foot { display: grid; padding: 10px 14px; background: var(--surface-3); font-weight: 600; }
 .dot { width: 5px; height: 5px; border-radius: 1px; flex: none; }
 .right { text-align: right; }
 /* Column order is DOM order (income LHS since 2026-07-27); category panel
-   keeps the wider track, now in the middle. */
-.overview-grid { display: grid; grid-template-columns: 1fr 1.35fr 1fr; gap: 14px; align-items: start; }
+   keeps the widest track, now in the middle — owner: expanded category
+   items were unreadable, so it gets extra width over the side columns. */
+.overview-grid { display: grid; grid-template-columns: 0.92fr 1.55fr 1fr; gap: 14px; align-items: start; }
 .overview-screen { display: flex; flex-direction: column; gap: 14px; }
 
-/* Hero band (spec 2026-07-27 §6): lifetime income + household average. */
-.hero-band { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+/* Hero band (spec 2026-07-27 §6): lifetime income + household average +
+   card payments booked this month (ex "Credit card bills" panel). */
+.hero-band { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 14px; }
 .hero-cell { display: flex; flex-direction: column; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
 .hero-value { font-family: var(--mono); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .hero-sub { font-family: var(--mono); font-size: 15px; }
@@ -1545,6 +1549,16 @@ tr[data-drift='true'] td {
 @media (max-width: 1100px) {
   .badminton-grid { grid-template-columns: 1fr; }
 }
+
+/* Semantic panel tints (owner request 2026-07-27: "sections need separate
+   backgrounds — income green, banks greenish, expenses bit red"). A faint
+   wash of the semantic color over the surface; both themes derive from the
+   same vars, so light mode stays soft automatically. Footer rows keep
+   their own --surface-3 band on top of the tint. */
+.panel2[data-tint='green'] { background: color-mix(in srgb, var(--green) 12%, var(--surface)); }
+.panel2[data-tint='red'] { background: color-mix(in srgb, var(--red) 12%, var(--surface)); }
+.panel2[data-tint='amber'] { background: color-mix(in srgb, var(--amber) 12%, var(--surface)); }
+.panel2[data-tint='blue'] { background: color-mix(in srgb, var(--blue) 12%, var(--surface)); }
 .col-stack { display: flex; flex-direction: column; gap: 14px; }
 @media (max-width: 1100px) {
   .overview-grid { grid-template-columns: 1fr; }
@@ -1586,5 +1600,6 @@ tr[data-drift='true'] td {
    hairline meant for a panel's top-level row list; nested inside
    `.dg-inset`'s own padding that hairline read as a stray extra rule
    between items. */
-.dg-inset-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-size: 12px; }
+.dg-inset-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid var(--border-row); }
+.dg-inset-row:last-child { border-bottom: 0; }
 .dg-inset-row.muted { color: var(--muted); font-style: italic; }
