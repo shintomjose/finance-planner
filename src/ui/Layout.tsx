@@ -54,6 +54,9 @@ export interface LayoutProps {
    * callers (tests) aren't forced to supply it; KpiRow itself already
    * defaults `opts` to `{}`. */
   kpiOpts?: KpiOptions
+  /** Hard refresh (wipe cache + refetch everything — useAppData.refresh).
+   * Optional: no handler, no button. */
+  onRefresh?: () => void
 }
 
 export function Layout({
@@ -67,6 +70,7 @@ export function Layout({
   chip,
   screenProps,
   kpiOpts,
+  onRefresh,
 }: LayoutProps) {
   const ActiveComponent = SCREEN_REGISTRY[active].component
   const sorted = sortByPeriod(months)
@@ -128,6 +132,17 @@ export function Layout({
               )
             })}
           </nav>
+          {onRefresh && (
+            <button
+              type="button"
+              className="refresh-btn"
+              onClick={onRefresh}
+              title="Refresh — refetch all data from the sheet"
+              aria-label="Refresh data"
+            >
+              ↻
+            </button>
+          )}
           <ThemeToggle />
         </div>
       </header>

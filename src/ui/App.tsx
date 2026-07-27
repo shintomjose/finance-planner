@@ -39,7 +39,7 @@ export default function App() {
   // month below falls back to pickDisplayedMonth (current/latest). Not
   // persisted (brief: "Selection = App-level state (not persisted)").
   const [selectedTab, setSelectedTab] = useState<string | null>(null)
-  const { state, retry, appState, onStateChange } = useAppData(now)
+  const { state, retry, refresh, appState, onStateChange } = useAppData(now)
 
   if (state.kind === 'unauthenticated') return <SignIn note={state.note} />
   if (state.kind === 'loading') {
@@ -89,6 +89,7 @@ export default function App() {
       months={months}
       selectedMonth={selectedMonth}
       onSelectMonth={setSelectedTab}
+      onRefresh={refresh}
       kpiOpts={{ target, investedEUR }}
       banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
       chip={
