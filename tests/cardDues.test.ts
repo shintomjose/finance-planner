@@ -35,50 +35,43 @@ const SCRATCH: ScratchEntry[] = [
 describe('cardDues', () => {
   it('card dues = scratch balances AS-IS (owner: payments already deducted in the sheet); payments are note-only', () => {
     const m = month(SCRATCH, [tx('Advancia CC', 400), tx('Amazon CC', 50), tx('Amex CC', 300)])
-    const dues = cardDues(m, 100) // pretend SACHIN!G132 = 100
+    const dues = cardDues(m)
+    expect(dues).toHaveLength(3) // Sachin due removed entirely (owner: formula was wrong; income side now)
     expect(dues.find((d) => d.key === 'advanzia')!.due).toBe(1500.75) // J14 as-is, NOT minus 400
     expect(dues.find((d) => d.key === 'sparkasse')!.due).toBe(320.5)
     expect(dues.find((d) => d.key === 'amex')!.due).toBe(210.4)
     expect(dues.find((d) => d.key === 'advanzia')!.note).toContain('400,00') // paid shown as a line
-    expect(dues.find((d) => d.key === 'sachin')!.due).toBe(720.35) // 900.6 − 100 − 80.25 (Sachin formula unchanged)
-  })
-
-  it('sachin note always spells out both subtrahends (owner bracket rule)', () => {
-    const dues = cardDues(month(SCRATCH), 100)
-    const note = dues.find((d) => d.key === 'sachin')!.note
-    expect(note).toContain('100,00') // ledger remaining
-    expect(note).toContain('80,25') // IJ scratch
   })
 
   it('missing scratch figure → null due with an explanatory note, never 0', () => {
-    const dues = cardDues(month([]), null)
+    const dues = cardDues(month([]))
+    expect(dues).toHaveLength(3)
     for (const d of dues) {
       expect(d.due).toBeNull()
       expect(d.note.length).toBeGreaterThan(0)
     }
-    expect(dues.find((d) => d.key === 'sachin')!.note).toContain('SACHIN ledger unavailable')
   })
 
   it('no payment row yet → balance due with a "nothing paid" note', () => {
-    const dues = cardDues(month(SCRATCH), 0)
+    const dues = cardDues(month(SCRATCH))
     expect(dues.find((d) => d.key === 'advanzia')!.due).toBe(1500.75)
     expect(dues.find((d) => d.key === 'advanzia')!.note).toContain('nothing paid')
   })
 
   it('"upcoming amex" scratch row never mistaken for the Amex balance (exact match)', () => {
-    const dues = cardDues(month([s('Upcoming Amex', 999, 'IJ')]), null)
+    const dues = cardDues(month([s('Upcoming Amex', 999, 'IJ')]))
     expect(dues.find((d) => d.key === 'amex')!.due).toBeNull()
   })
 
   it('multiple payment rows for one card are summed in the note (due untouched)', () => {
     const m = month(SCRATCH, [tx('Advancia CC', 1000), tx('Advanzia', 200)])
-    const row = cardDues(m, 0).find((d) => d.key === 'advanzia')!
+    const row = cardDues(m).find((d) => d.key === 'advanzia')!
     expect(row.due).toBe(1500.75)
     expect(row.note).toContain('1.200,00')
   })
 
   it('duesTotal ignores null rows', () => {
-    const dues = cardDues(month([s('Current Amazon', 100, 'IJ')]), null)
+    const dues = cardDues(month([s('Current Amazon', 100, 'IJ')]))
     expect(duesTotal(dues)).toBe(100)
   })
 })

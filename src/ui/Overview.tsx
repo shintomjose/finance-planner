@@ -54,11 +54,12 @@ import { lifetimeTotals } from '../lib/lifetimeTotals'
 import { round2, sortByPeriod, sumAmounts } from '../lib/mathUtils'
 import { categorize, normLabel } from '../lib/normalize'
 import { overviewFigures } from '../lib/overviewFigures'
+import { upcomingIncome } from '../lib/upcomingIncome'
 import { groupUpcoming } from '../lib/upcomingProviders'
 import type { MonthlyPlanData } from '../parse/monthlyPlan'
 import { DEFAULT_STATE } from '../state/appState'
 import type { AppState } from '../state/appState'
-import type { MonthData, PersonLedger, Tx } from '../types'
+import type { MonthData, Tx } from '../types'
 import { categoryColor } from './charts/categoryColor'
 import { getPalette } from './charts/palette'
 import { useColorScheme } from './charts/useColorScheme'
@@ -121,13 +122,11 @@ export function Overview({
   selectedMonth,
   plan,
   appState,
-  sachin,
 }: {
   months: MonthData[]
   selectedMonth: MonthData
   plan?: MonthlyPlanData | null
   appState?: AppState
-  sachin?: { ledger: PersonLedger } | null
 }) {
   const scheme = useColorScheme()
   const palette = getPalette(scheme)
@@ -234,13 +233,14 @@ export function Overview({
   const bankTotal = selectedMonth.bankTotal ?? round2(selectedMonth.banks.reduce((s, b) => s + b.amountEUR, 0))
 
   // --- Panel 3b: Upcoming to pay -------------------------------------------
-  // Card & person dues (spec 2026-07-27 §3/§6): computed from bank-scratch
-  // statement balances, ledger remaining and this month's card payments —
-  // NOT from the sheet's M/N/O rows. Statement rows in the M/N/O list
-  // ("Advancia Credit Card", "Amazon CC", "Amex") duplicate these dues and
-  // are dropped from the bills list; everything else stays.
-  const dues = cardDues(selectedMonth, sachin?.ledger.totals.remaining ?? null)
+  // Card dues (spec 2026-07-27 §3/§6, Sachin row removed same day): scratch
+  // statement balances, NOT the sheet's M/N/O rows. Statement rows in the
+  // M/N/O list ("Advancia Credit Card", "Amazon CC", "Amex") and the bare
+  // "Sachin" row (an income expectation, not an expense) are dropped from
+  // the bills list; everything else stays.
+  const dues = cardDues(selectedMonth)
   const duesSum = duesTotal(dues)
+  const expectedIncome = upcomingIncome(selectedMonth)
   // No scratch data at all (pre-Nov-2024 tabs) → hide the dues sub-block
   // entirely; hasAnyDue below still keys the coverage-note suppression.
   const showDues = (selectedMonth.scratch ?? []).length > 0
@@ -630,6 +630,38 @@ export function Overview({
                 <span />
                 <span className="right">
                   <Money amountEUR={toPayTotal} tabular />
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Upcoming income (owner 2026-07-27): expected inflows — Salary,
+            KG/EG, money owed to him (Sachin, Cris, …) — read from the K/L
+            forecast block the owner curates in the sheet. */}
+        <div className="panel2" data-tint="green">
+          <div className="panel2-head">
+            <span>Upcoming income</span>
+            <span className="panel2-meta">{expectedIncome ? `${expectedIncome.items.length} sources` : 'no forecast block'}</span>
+          </div>
+          {expectedIncome == null ? (
+            <EmptyState message="No K/L forecast block found in this month's tab." />
+          ) : expectedIncome.items.length === 0 ? (
+            <EmptyState message="Nothing expected right now — fill the forecast rows (Salary, KG+EG, Sachin…) in the sheet." />
+          ) : (
+            <>
+              {expectedIncome.items.map((item, idx) => (
+                <div className="dg-row" style={{ gridTemplateColumns: BANK_COLS }} key={`${item.label}-${idx}`}>
+                  <span>{item.label}</span>
+                  <span className="right">
+                    <Money amountEUR={item.amountEUR} tabular />
+                  </span>
+                </div>
+              ))}
+              <div className="dg-foot" style={{ gridTemplateColumns: BANK_COLS }}>
+                <span>Total expected</span>
+                <span className="right">
+                  <Money amountEUR={expectedIncome.total} tabular />
                 </span>
               </div>
             </>

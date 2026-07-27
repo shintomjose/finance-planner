@@ -182,7 +182,7 @@ const overviewComponent = lazy(async () => {
   const { Overview } = await import('../Overview')
   return {
     default: (p: ScreenProps) => (
-      <Overview months={p.months} selectedMonth={p.selectedMonth} plan={p.plan} appState={p.appState} sachin={p.sachin} />
+      <Overview months={p.months} selectedMonth={p.selectedMonth} plan={p.plan} appState={p.appState} />
     ),
   }
 })
