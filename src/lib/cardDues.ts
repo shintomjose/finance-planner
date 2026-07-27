@@ -95,19 +95,18 @@ export function duesTotal(rows: CardDue[]): number {
  * card name — so "Amex Netto", "Advanzia Add", "Sparkasse Interest",
  * "Amazon Prime" (extra meaningful words) all stay real bills.
  */
-/** Upcoming rows that must never appear in the bills list: card statement
- * rows (duplicated by the computed dues) AND the bare "Sachin" row (owner
- * 2026-07-27: Sachin is money owed TO him — an income expectation, tracked
- * in lib/upcomingIncome.ts — never an upcoming expense). */
-export function isDueCoveredUpcoming(name: string): boolean {
-  return isCardStatementUpcoming(name) || normLabel(name) === 'sachin'
-}
+/** Upcoming rows that must never count in the bills list (owner
+ * 2026-07-27, second revision): the card statement balances (the dues
+ * above) ALREADY INCLUDE every pending card charge, so EVERY upcoming row
+ * charged to a card ("Advanzia Add", "Amazon Prime", "Amex Netto", the
+ * statement rows themselves, ...) would double-count against its due —
+ * any row mentioning a card/provider is out, not just the bare statement
+ * rows. The bare "Sachin" row is also out (money owed TO the owner — an
+ * income expectation, lib/upcomingIncome.ts — never an expense). */
+const CARD_PROVIDERS = ['advanzia', 'advancia', 'amex', 'sparkasse', 'amazon']
 
-export function isCardStatementUpcoming(name: string): boolean {
-  // 'bill' is deliberately NOT a strip word: "Amazon Bill" is the
-  // frequency-34 FIXED label (normalize.ts seed — a recurring service bill,
-  // not the Sparkasse card); stripping it would silently swallow that row
-  // (reviewer finding, 2026-07-27).
-  const stripped = normLabel(name).replace(/\b(credit card|credit|card|cc)\b/g, ' ').replace(/\s+/g, ' ').trim()
-  return ['advanzia', 'advancia', 'amex', 'sparkasse', 'amazon'].includes(stripped)
+export function isDueCoveredUpcoming(name: string): boolean {
+  const norm = normLabel(name)
+  if (norm === 'sachin') return true
+  return CARD_PROVIDERS.some((p) => norm.includes(p))
 }
