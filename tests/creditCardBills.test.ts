@@ -38,6 +38,16 @@ describe('creditCardBills', () => {
     expect(result.rows).toEqual([{ label: 'Amex', amountEUR: 15.5 }])
   })
 
+  it('"<card> CC" payment labels (spec 2026-07-27 §2 aliases) fold into the canonical card rows', () => {
+    const expenses = [tx('Advancia CC', 400), tx('Amex CC', 300), tx('Amazon CC', 50)]
+    const result = creditCardBills(expenses)
+    expect(result.rows).toEqual([
+      { label: 'Advanzia', amountEUR: 400 },
+      { label: 'Amex', amountEUR: 300 },
+      { label: 'Sparkasse', amountEUR: 50 },
+    ])
+  })
+
   it('ignores expenses outside the credit card category', () => {
     const expenses = [tx('Rent', 850), tx('Church', 20)]
     const result = creditCardBills(expenses)

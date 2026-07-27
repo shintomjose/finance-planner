@@ -102,14 +102,15 @@ describe('appState', () => {
   })
 
   // Locked behavior (reviewer, Plan 2 Task 7): a wrong-typed or non-finite
-  // fxRate is silently ignored and defaults to 100 — importJSON does not
-  // throw for this, only for a non-object payload.
-  it('importJSON defaults fxRate to 100 when the value is wrong-typed', () => {
+  // fxRate is silently ignored and falls back to the default (92 ₹/€ since
+  // 2026-07-27, owner request) — importJSON does not throw for this, only
+  // for a non-object payload.
+  it('importJSON defaults fxRate to 92 when the value is wrong-typed', () => {
     const result = importJSON(JSON.stringify({ fxRate: 'abc' }))
-    expect(result.fxRate).toBe(100)
+    expect(result.fxRate).toBe(92)
   })
 
-  it('importJSON defaults fxRate to 100 when the value is non-finite', () => {
+  it('importJSON defaults fxRate to 92 when the value is non-finite', () => {
     // JSON has no NaN literal (JSON.stringify(NaN) serializes to `null`,
     // which JSON.parse would hand back as `null`, not NaN), so the raw JSON
     // text is written by hand here rather than via JSON.stringify — a
@@ -118,7 +119,7 @@ describe('appState', () => {
     // it overflows to Infinity, a real non-finite `number` that exercises
     // the same Number.isFinite guard NaN would hit.
     const result = importJSON('{"fxRate":1e1000}')
-    expect(result.fxRate).toBe(100)
+    expect(result.fxRate).toBe(92)
   })
 
   it('DEFAULT_STATE is frozen (including its nested collections) so it cannot be mutated in place', () => {

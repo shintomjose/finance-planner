@@ -46,9 +46,11 @@
 //    standalone card; the rebuild's `categorize()` bucket "credit card"
 //    would otherwise fold these into the category panel's single row).
 import { useState } from 'react'
+import { cardDues, duesTotal, isCardStatementUpcoming } from '../lib/cardDues'
 import { creditCardBills } from '../lib/creditCardBills'
 import { partitionUpcoming } from '../lib/foodHome'
 import { groupIncome } from '../lib/incomeGroups'
+import { lifetimeTotals } from '../lib/lifetimeTotals'
 import { round2, sortByPeriod, sumAmounts } from '../lib/mathUtils'
 import { categorize, normLabel } from '../lib/normalize'
 import { overviewFigures } from '../lib/overviewFigures'
@@ -56,7 +58,7 @@ import { groupUpcoming } from '../lib/upcomingProviders'
 import type { MonthlyPlanData } from '../parse/monthlyPlan'
 import { DEFAULT_STATE } from '../state/appState'
 import type { AppState } from '../state/appState'
-import type { MonthData, Tx } from '../types'
+import type { MonthData, PersonLedger, Tx } from '../types'
 import { categoryColor } from './charts/categoryColor'
 import { getPalette } from './charts/palette'
 import { useColorScheme } from './charts/useColorScheme'
@@ -64,6 +66,10 @@ import { BarMeter, EmptyState, Money } from './shared'
 
 const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })
 const fmtEUR = (v: number) => eurFmt.format(v)
+const inrFmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const monthLabel = (m: MonthData) => `${MONTH_ABBR[m.period.month - 1]} '${String(m.period.year % 100).padStart(2, '0')}`
 
 interface CategoryRow {
   category: string
@@ -73,9 +79,10 @@ interface CategoryRow {
   variance: number | null
 }
 
-const CAT_COLS = '10px 1fr 40px 100px 88px 76px 84px'
+const CAT_COLS = '10px minmax(0, 1fr) 48px 96px 92px 80px 84px'
+const DUES_COLS = '1fr 110px'
 const INCOME_COLS = '1fr 40px 100px 88px'
-const SAVINGS_COLS = 'auto 1fr 88px 56px'
+const SAVINGS_COLS = '58px 1fr 92px 48px'
 const BANK_COLS = '1fr 88px'
 const UPCOMING_COLS = '1fr 40px 88px'
 const CARD_COLS = '1fr 88px'
@@ -115,15 +122,19 @@ export function Overview({
   selectedMonth,
   plan,
   appState,
+  sachin,
 }: {
   months: MonthData[]
   selectedMonth: MonthData
   plan?: MonthlyPlanData | null
   appState?: AppState
+  sachin?: { ledger: PersonLedger } | null
 }) {
   const scheme = useColorScheme()
   const palette = getPalette(scheme)
-  const overrides = (appState ?? DEFAULT_STATE).categoryOverrides
+  const state = appState ?? DEFAULT_STATE
+  const overrides = state.categoryOverrides
+  const fxRate = state.fxRate
 
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
   const [openIncome, setOpenIncome] = useState<Record<string, boolean>>({})
@@ -211,7 +222,7 @@ export function Overview({
     const f = overviewFigures(m)
     const saved = round2(f.incomeOwn - f.expense)
     const rate = f.incomeOwn > 0 ? saved / f.incomeOwn : null
-    return { tab: m.tab, saved, rate }
+    return { tab: m.tab, label: monthLabel(m), saved, rate }
   })
   const maxAbsSaved = Math.max(1, ...savedPoints.map((p) => Math.abs(p.saved)))
   // Floor of 1200 when a target exists so a small target doesn't make the
@@ -224,117 +235,71 @@ export function Overview({
   const bankTotal = selectedMonth.bankTotal ?? round2(selectedMonth.banks.reduce((s, b) => s + b.amountEUR, 0))
 
   // --- Panel 3b: Upcoming to pay -------------------------------------------
-  const { bills, foodHomeRemaining } = partitionUpcoming(selectedMonth.upcoming)
+  // Card & person dues (spec 2026-07-27 §3/§6): computed from bank-scratch
+  // statement balances, ledger remaining and this month's card payments —
+  // NOT from the sheet's M/N/O rows. Statement rows in the M/N/O list
+  // ("Advancia Credit Card", "Amazon CC", "Amex") duplicate these dues and
+  // are dropped from the bills list; everything else stays.
+  const dues = cardDues(selectedMonth, sachin?.ledger.totals.remaining ?? null)
+  const duesSum = duesTotal(dues)
+  // No scratch data at all (pre-Nov-2024 tabs) → hide the dues sub-block
+  // entirely; hasAnyDue below still keys the coverage-note suppression.
+  const showDues = (selectedMonth.scratch ?? []).length > 0
+  const { bills: allBills, foodHomeRemaining } = partitionUpcoming(selectedMonth.upcoming)
+  const bills = allBills.filter((u) => !isCardStatementUpcoming(u.name))
   const billsTotal = round2(bills.reduce((s, u) => s + (u.toPay ?? 0), 0))
-  const coverage = round2(bankTotal - billsTotal)
+  const toPayTotal = round2(duesSum + billsTotal)
+  const coverage = round2(bankTotal - toPayTotal)
   const providerGroups = groupUpcoming(bills)
   // Suppress the coverage claim entirely for a month with nothing to cover
   // and nothing to cover it with — "Covered … with €0.00 to spare" over an
   // empty month reads as a real claim about data that was never recorded,
   // not a genuinely-covered position.
+  const hasAnyDue = dues.some((d) => d.due != null)
   const coverageNote =
-    selectedMonth.banks.length === 0 && bills.length === 0
+    selectedMonth.banks.length === 0 && bills.length === 0 && !hasAnyDue
       ? null
       : coverage >= 0
         ? `Covered by cash + savings with ${fmtEUR(coverage)} to spare.`
         : `Obligations exceed cash + savings by ${fmtEUR(Math.abs(coverage))}.`
 
+  // --- Hero band: lifetime totals (spec 2026-07-27 §4/§6) -----------------
+  const lifetime = lifetimeTotals(months)
+
   // --- Panel 3c: Credit card bills (human-approved reintegration) --------
   const { rows: cardRows, total: cardTotal } = creditCardBills(selectedMonth.expenses, overrides)
 
   return (
-    <div className="overview-grid">
-      {/* Panel 1: Expenses by category */}
-      <div className="panel2">
-        <div className="panel2-head">
-          <span>Expenses by category</span>
-          <span className="panel2-meta">
-            {categoryRows.length} categories{budgetCoverageNote ? ` · ${budgetCoverageNote}` : ''}
-          </span>
-        </div>
-        {driftNote && (
-          <div className="dg-note" style={{ color: 'var(--amber)' }}>
-            {driftNote}
+    <div className="overview-screen">
+      {/* Hero band: lifetime income + household average (spec §6) */}
+      <div className="hero-band">
+        <div className="hero-cell">
+          <div className="kicker">Total income till now</div>
+          <div className="hero-value num">
+            <Money amountEUR={lifetime.totalEUR} tabular />
           </div>
-        )}
-        {categoryRows.length === 0 ? (
-          <EmptyState message="No expenses recorded." />
-        ) : (
-          <>
-            <div className="dg-cols" style={{ gridTemplateColumns: CAT_COLS }}>
-              <span />
-              <span>Category</span>
-              <span className="right">Items</span>
-              <span>Share</span>
-              <span className="right">Actual</span>
-              <span className="right">Budget</span>
-              <span className="right">Var</span>
-            </div>
-            {categoryRows.map((row) => {
-              const color = categoryColor(row.category, palette)
-              const sharePct = totalExpense > 0 ? (row.total / totalExpense) * 100 : 0
-              const varianceColor = row.variance == null ? undefined : row.variance >= 0 ? 'var(--green)' : 'var(--red)'
-              const isOpen = expandedCategory === row.category
-              const sortedItems = [...row.items].sort((a, b) => compareAmountDesc(a.amountEUR, b.amountEUR))
-              return (
-                <div key={row.category}>
-                  <div
-                    className="dg-row clickable"
-                    style={{ gridTemplateColumns: CAT_COLS }}
-                    role="button"
-                    tabIndex={0}
-                    aria-expanded={isOpen}
-                    onClick={() => setExpandedCategory(isOpen ? null : row.category)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setExpandedCategory(isOpen ? null : row.category)
-                      }
-                    }}
-                  >
-                    <span className="dot" style={{ background: color }} />
-                    <span>{row.category}</span>
-                    <span className="right">{row.items.length}</span>
-                    <BarMeter pct={sharePct} color={color} />
-                    <span className="right">
-                      <Money amountEUR={row.total} tabular />
-                    </span>
-                    <span className="right">{row.budget == null ? '—' : <Money amountEUR={row.budget} tabular />}</span>
-                    <span className="right" style={{ color: varianceColor }}>
-                      {row.variance == null ? '—' : <Money amountEUR={row.variance} tabular />}
-                    </span>
-                  </div>
-                  {isOpen && (
-                    <div className="dg-inset">
-                      {sortedItems.map((tx) => (
-                        <InsetRow key={`${tx.tab}-${tx.row}-${tx.label}`} label={tx.label} amount={tx.amountEUR} planned={tx.planned} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            <div className="dg-foot" style={{ gridTemplateColumns: CAT_COLS }}>
-              <span />
-              <span>Total</span>
-              <span className="right">{selectedMonth.expenses.length}</span>
-              <span />
-              <span className="right">
-                <Money amountEUR={totalExpense} tabular />
-              </span>
-              <span className="right">{footerBudget == null ? '—' : <Money amountEUR={footerBudget} tabular />}</span>
-              <span
-                className="right"
-                style={{ color: footerVariance == null ? undefined : footerVariance >= 0 ? 'var(--green)' : 'var(--red)' }}
-              >
-                {footerVariance == null ? '—' : <Money amountEUR={footerVariance} tabular />}
-              </span>
-            </div>
-          </>
-        )}
+          <div className="hero-sub num">
+            {inrFmt.format(lifetime.totalEUR * fxRate)} <span className="hero-rate">@ {fxRate} ₹/€</span>
+          </div>
+          <div className="hero-note num">
+            Salary {fmtEUR(lifetime.salaryEUR)} · KG {fmtEUR(lifetime.kgEUR)}
+          </div>
+        </div>
+        <div className="hero-cell">
+          <div className="kicker">Monthly AVG household</div>
+          <div className="hero-value num">
+            {lifetime.householdAvgEUR == null ? '—' : <Money amountEUR={lifetime.householdAvgEUR} tabular />}
+          </div>
+          <div className="hero-note num">
+            {fmtEUR(lifetime.householdTotalEUR)} across {lifetime.monthCount} months
+          </div>
+        </div>
       </div>
 
-      {/* Column 2: Income sources + Savings progress */}
+      <div className="overview-grid">
+      {/* Column 1 (LHS, owner request spec §6): Income sources + Savings
+          progress — this col-stack rendered after the category panel before
+          2026-07-27; markup unchanged, order swapped. */}
       <div className="col-stack">
         <div className="panel2">
           <div className="panel2-head">
@@ -424,7 +389,7 @@ export function Overview({
                       : 'var(--red)'
                 return (
                   <div className="dg-row" style={{ gridTemplateColumns: SAVINGS_COLS }} key={p.tab}>
-                    <span>{p.tab}</span>
+                    <span className="num">{p.label}</span>
                     <BarMeter pct={pct} color={color} />
                     <span className="right" style={{ color }}>
                       {p.saved >= 0 && '+'}
@@ -445,6 +410,96 @@ export function Overview({
             </>
           )}
         </div>
+      </div>
+
+      {/* Column 2: Expenses by category */}
+      <div className="panel2">
+        <div className="panel2-head">
+          <span>Expenses by category</span>
+          <span className="panel2-meta">
+            {categoryRows.length} categories{budgetCoverageNote ? ` · ${budgetCoverageNote}` : ''}
+          </span>
+        </div>
+        {driftNote && (
+          <div className="dg-note" style={{ color: 'var(--amber)' }}>
+            {driftNote}
+          </div>
+        )}
+        {categoryRows.length === 0 ? (
+          <EmptyState message="No expenses recorded." />
+        ) : (
+          <>
+            <div className="dg-cols" style={{ gridTemplateColumns: CAT_COLS }}>
+              <span className="dot-spacer" />
+              <span>Category</span>
+              <span className="right">Items</span>
+              <span>Share</span>
+              <span className="right">Actual</span>
+              <span className="right">Budget</span>
+              <span className="right">Var</span>
+            </div>
+            {categoryRows.map((row) => {
+              const color = categoryColor(row.category, palette)
+              const sharePct = totalExpense > 0 ? (row.total / totalExpense) * 100 : 0
+              const varianceColor = row.variance == null ? undefined : row.variance >= 0 ? 'var(--green)' : 'var(--red)'
+              const isOpen = expandedCategory === row.category
+              const sortedItems = [...row.items].sort((a, b) => compareAmountDesc(a.amountEUR, b.amountEUR))
+              return (
+                <div key={row.category}>
+                  <div
+                    className="dg-row clickable"
+                    style={{ gridTemplateColumns: CAT_COLS }}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => setExpandedCategory(isOpen ? null : row.category)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setExpandedCategory(isOpen ? null : row.category)
+                      }
+                    }}
+                  >
+                    <span className="dot" style={{ background: color }} />
+                    <span className="cat-label">{row.category}</span>
+                    <span className="right">{row.items.length}</span>
+                    <BarMeter pct={sharePct} color={color} />
+                    <span className="right">
+                      <Money amountEUR={row.total} tabular />
+                    </span>
+                    <span className="right">{row.budget == null ? '—' : <Money amountEUR={row.budget} tabular />}</span>
+                    <span className="right" style={{ color: varianceColor }}>
+                      {row.variance == null ? '—' : <Money amountEUR={row.variance} tabular />}
+                    </span>
+                  </div>
+                  {isOpen && (
+                    <div className="dg-inset">
+                      {sortedItems.map((tx) => (
+                        <InsetRow key={`${tx.tab}-${tx.row}-${tx.label}`} label={tx.label} amount={tx.amountEUR} planned={tx.planned} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            <div className="dg-foot" style={{ gridTemplateColumns: CAT_COLS }}>
+              <span className="dot-spacer" />
+              <span>Total</span>
+              <span className="right">{selectedMonth.expenses.length}</span>
+              <span />
+              <span className="right">
+                <Money amountEUR={totalExpense} tabular />
+              </span>
+              <span className="right">{footerBudget == null ? '—' : <Money amountEUR={footerBudget} tabular />}</span>
+              <span
+                className="right"
+                style={{ color: footerVariance == null ? undefined : footerVariance >= 0 ? 'var(--green)' : 'var(--red)' }}
+              >
+                {footerVariance == null ? '—' : <Money amountEUR={footerVariance} tabular />}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Column 3: Bank accounts + Upcoming to pay */}
@@ -482,10 +537,40 @@ export function Overview({
             <span className="panel2-meta">{bills.length} bills</span>
           </div>
           {coverageNote && <div className="dg-note">{coverageNote}</div>}
-          {providerGroups.length === 0 && foodHomeRemaining == null ? (
+          {providerGroups.length === 0 && foodHomeRemaining == null && !showDues ? (
             <EmptyState message="Nothing upcoming." />
           ) : (
             <>
+              {/* Card & person dues (spec §3/§6): computed rows, not the
+                  sheet's M/N/O figures. Rows with a missing input show an
+                  em-dash and name the missing piece in their note. The
+                  whole sub-block is suppressed for months with no scratch
+                  data at all (pre-Nov-2024 tabs) — four all-dash rows there
+                  are noise, not information (reviewer, 2026-07-27). */}
+              {showDues && (
+                <>
+                  <div className="dg-cols" style={{ gridTemplateColumns: DUES_COLS }}>
+                    <span>Card &amp; person dues</span>
+                    <span className="right">Due</span>
+                  </div>
+                  {dues.map((d) => (
+                    <div className="dg-row" style={{ gridTemplateColumns: DUES_COLS }} key={d.key}>
+                      <span className="dues-label">
+                        {d.label}
+                        <span className="dues-note num">{d.note}</span>
+                      </span>
+                      <span className="right" style={{ color: d.due != null && d.due < 0 ? 'var(--green)' : undefined }}>
+                        <Money amountEUR={d.due} tabular />
+                      </span>
+                    </div>
+                  ))}
+                  <div className="dg-cols" style={{ gridTemplateColumns: UPCOMING_COLS }}>
+                    <span>Other upcoming</span>
+                    <span className="right">Items</span>
+                    <span className="right">To pay</span>
+                  </div>
+                </>
+              )}
               {providerGroups.map((g) => {
                 const isOpen = !!openUpcoming[g.name]
                 return (
@@ -530,10 +615,10 @@ export function Overview({
                 </div>
               )}
               <div className="dg-foot" style={{ gridTemplateColumns: UPCOMING_COLS }}>
-                <span>Total to pay</span>
+                <span>{showDues ? 'Total to pay (dues + bills)' : 'Total to pay'}</span>
                 <span />
                 <span className="right">
-                  <Money amountEUR={billsTotal} tabular />
+                  <Money amountEUR={toPayTotal} tabular />
                 </span>
               </div>
             </>
@@ -560,6 +645,7 @@ export function Overview({
             ))
           )}
         </div>
+      </div>
       </div>
     </div>
   )

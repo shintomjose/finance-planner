@@ -9,7 +9,9 @@ import { overviewFigures } from './overviewFigures'
 import { partitionUpcoming } from './foodHome'
 import { round2, sortByPeriod } from './mathUtils'
 
-export type KpiId = 'income' | 'expenses' | 'saved' | 'cash' | 'savings' | 'upcoming' | 'networth'
+// 'savings' card removed 2026-07-27 (owner request) — monthMetrics still
+// computes the savings figure because the networth card's math needs it.
+export type KpiId = 'income' | 'expenses' | 'saved' | 'cash' | 'upcoming' | 'networth'
 
 export interface KpiCard {
   id: KpiId
@@ -107,7 +109,7 @@ const METRICS: MetricSpec[] = [
   },
   {
     id: 'saved',
-    label: 'Saved',
+    label: 'This Month +/-',
     goodUp: true,
     value: (p) => p.saved,
     note: (p, opts) => {
@@ -119,17 +121,10 @@ const METRICS: MetricSpec[] = [
   },
   {
     id: 'cash',
-    label: 'Cash',
+    label: 'Total Savings +/-',
     goodUp: true,
     value: (p) => p.cash,
     note: (p) => `across ${p.bankCount} accounts`,
-  },
-  {
-    id: 'savings',
-    label: 'Savings',
-    goodUp: true,
-    value: (p) => p.savings,
-    note: (p) => (p.savingsNames.length ? p.savingsNames.join(', ') : 'no savings account'),
   },
   {
     id: 'upcoming',

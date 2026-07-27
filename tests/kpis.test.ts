@@ -38,10 +38,17 @@ describe('buildKpis', () => {
     expect(k.find((c) => c.id === 'upcoming')!.value).toBe(80)
   })
 
-  it('savings pot picks /sav/i accounts; cash uses bank sum fallback', () => {
+  it('cash uses bank sum fallback; savings card removed (2026-07-27), pot still feeds networth', () => {
     const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
-    expect(k.find((c) => c.id === 'savings')!.value).toBe(30)
     expect(k.find((c) => c.id === 'cash')!.value).toBe(230)
+    expect(k.some((c) => c.id === ('savings' as string))).toBe(false)
+    expect(k).toHaveLength(6)
+  })
+
+  it('owner labels (2026-07-27): saved and cash cards renamed', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
+    expect(k.find((c) => c.id === 'saved')!.label).toBe('This Month +/-')
+    expect(k.find((c) => c.id === 'cash')!.label).toBe('Total Savings +/-')
   })
 
   it('delta + series across months, window ends at selected', () => {
@@ -57,7 +64,6 @@ describe('buildKpis', () => {
     const bare = month('JAN_22', 2022, 1, { banks: [], upcoming: [], bankTotal: null })
     const k = buildKpis([bare], 'JAN_22')
     expect(k.find((c) => c.id === 'cash')!.value).toBeNull()
-    expect(k.find((c) => c.id === 'savings')!.value).toBeNull()
     expect(k.find((c) => c.id === 'networth')!.value).toBeNull()
   })
 
@@ -71,12 +77,11 @@ describe('buildKpis', () => {
     expect(cash.delta).toBeNull() // previous month's cash is null, not 0 — delta must not be value−0
   })
 
-  it('note fallbacks: no carryover, no savings account', () => {
+  it('note fallbacks: no carryover; savings pot null without /sav/i account', () => {
     const m = month('MAR_25', 2025, 3, { carryover: 0, banks: [{ name: 'Main', amountEUR: 200 }] })
     const k = buildKpis([m], 'MAR_25')
     expect(k.find((c) => c.id === 'income')!.note).toContain('no carryover')
-    expect(k.find((c) => c.id === 'savings')!.value).toBeNull()
-    expect(k.find((c) => c.id === 'savings')!.note).toContain('no savings account')
+    expect(monthMetrics(m).savings).toBeNull()
   })
 
   it('monthMetrics (exported for Trends reuse) computes the same upcoming figure as buildKpis', () => {

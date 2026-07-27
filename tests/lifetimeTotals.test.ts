@@ -1,0 +1,59 @@
+import { describe, expect, it } from 'vitest'
+import { lifetimeTotals } from '../src/lib/lifetimeTotals'
+import type { MonthData, Tx } from '../src/types'
+
+let row = 0
+function tx(label: string, amountEUR: number | null, kind: 'income' | 'expense', household = false): Tx {
+  return { tab: 'T', row: ++row, label, normLabel: label.toLowerCase(), amountEUR, kind, planned: amountEUR === null, household }
+}
+
+function month(tab: string, income: Tx[], over: Partial<MonthData> = {}): MonthData {
+  return {
+    tab, period: { year: 2025, month: 1 }, era: 'v2025',
+    income, expenses: [], carryover: null,
+    summary: { totalIncome: null, totalExpense: null, balance: null, household: null },
+    banks: [], bankTotal: null, expectedActual: null, balanceAfterFuture: null,
+    upcoming: [], issues: [], ...over,
+  }
+}
+
+describe('lifetimeTotals', () => {
+  it('sums salary and KG/KinderGeld across months; other income excluded', () => {
+    const months = [
+      month('A', [tx('Salary', 1000, 'income'), tx('KG', 250, 'income'), tx('Revolut Add', 500, 'income')]),
+      month('B', [tx('Salary', 1100, 'income'), tx('KinderGeld', 255, 'income')]),
+    ]
+    const t = lifetimeTotals(months)
+    expect(t.salaryEUR).toBe(2100)
+    expect(t.kgEUR).toBe(505)
+    expect(t.totalEUR).toBe(2605)
+    expect(t.monthCount).toBe(2)
+  })
+
+  it('carryover never counts (it is not in income[] at all — parser guarantee)', () => {
+    // lifetimeTotals reads income[] only; a month whose only inflow was
+    // carryover contributes 0.
+    const t = lifetimeTotals([month('A', [])])
+    expect(t.totalEUR).toBe(0)
+  })
+
+  it('household: summary cell preferred, tagged-expense fallback, 0 when neither; ALL months in denominator', () => {
+    const withSummary = month('A', [], { summary: { totalIncome: null, totalExpense: null, balance: null, household: 600 } })
+    const withTagged = month('B', [], { expenses: [tx('Rent', 500, 'expense', true), tx('Cig', 9, 'expense', false)] })
+    const withNeither = month('C', [])
+    const t = lifetimeTotals([withSummary, withTagged, withNeither])
+    expect(t.householdTotalEUR).toBe(1100) // 600 + 500 + 0
+    expect(t.householdAvgEUR).toBe(366.67) // 1100 / 3, round2
+  })
+
+  it('empty months → zero totals, null average', () => {
+    const t = lifetimeTotals([])
+    expect(t.totalEUR).toBe(0)
+    expect(t.householdAvgEUR).toBeNull()
+  })
+
+  it('null amounts (planned rows) contribute nothing', () => {
+    const t = lifetimeTotals([month('A', [tx('Salary', null, 'income')])])
+    expect(t.salaryEUR).toBe(0)
+  })
+})

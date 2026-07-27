@@ -1409,6 +1409,8 @@ tr[data-drift='true'] td {
    --------------------------------------------------------------------- */
 
 .theme-toggle { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.refresh-btn { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; }
+.refresh-btn:hover { color: var(--text); }
 .theme-toggle-btn { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 13px; line-height: 1; }
 .theme-toggle-btn.active { background: var(--accent-wash); color: var(--text); }
 
@@ -1419,13 +1421,13 @@ tr[data-drift='true'] td {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
 @media (max-width: 1200px) {
   .kpi-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1509,7 +1511,40 @@ tr[data-drift='true'] td {
 .dg-foot { display: grid; padding: 10px 14px; background: var(--surface-3); font-weight: 600; }
 .dot { width: 5px; height: 5px; border-radius: 1px; flex: none; }
 .right { text-align: right; }
-.overview-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 14px; align-items: start; }
+/* Column order is DOM order (income LHS since 2026-07-27); category panel
+   keeps the wider track, now in the middle. */
+.overview-grid { display: grid; grid-template-columns: 1fr 1.35fr 1fr; gap: 14px; align-items: start; }
+.overview-screen { display: flex; flex-direction: column; gap: 14px; }
+
+/* Hero band (spec 2026-07-27 §6): lifetime income + household average. */
+.hero-band { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+.hero-cell { display: flex; flex-direction: column; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.hero-value { font-family: var(--mono); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.hero-sub { font-family: var(--mono); font-size: 15px; }
+.hero-rate { color: var(--muted); font-size: 11px; }
+.hero-note { font-size: 11.5px; color: var(--muted); }
+@media (max-width: 1100px) {
+  .hero-band { grid-template-columns: 1fr; }
+}
+
+/* Category names read as sheet-style tags (owner: all uppercase). */
+.cat-label { text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.04em; }
+
+/* Card & person dues rows (Upcoming panel): label + formula note stacked. */
+.dues-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dues-note { font-size: 10.5px; color: var(--muted); }
+
+/* Column dividers for the datagrid detail sections (owner request
+   2026-07-27): a hairline before every column except the first. The 10px
+   dot column is exempted via :nth-child(2) — a rule 10px after the panel
+   edge reads as clutter, not structure. */
+.dg-cols > * + *, .dg-row > * + *, .dg-foot > * + * { border-left: 1px solid var(--border-row); padding-left: 10px; }
+.dg-row > .dot + *, .dg-cols > .dot-spacer + *, .dg-foot > .dot-spacer + * { border-left: 0; }
+
+.badminton-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 1100px) {
+  .badminton-grid { grid-template-columns: 1fr; }
+}
 .col-stack { display: flex; flex-direction: column; gap: 14px; }
 @media (max-width: 1100px) {
   .overview-grid { grid-template-columns: 1fr; }

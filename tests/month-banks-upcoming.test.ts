@@ -100,6 +100,46 @@ it('2019v2 AUG (upcoming block present) still parses upcoming normally — with-
   expect(m.issues.some(i => i.kind === 'marker-not-found' && i.detail.includes('upcoming'))).toBe(false)
 })
 
+// --- Scratch capture (spec 2026-07-27 §1) -------------------------------
+
+it('v2025 scratch: IJ label+number pairs below bank Total captured; non-numeric skipped silently', () => {
+  const m = parseMonth('JUN_25', JUN_25 as any)
+  const ij = (m.scratch ?? []).filter((s) => s.block === 'IJ')
+  expect(ij.map((s) => [s.normLabel, s.amountEUR])).toEqual([
+    ['current amazon', 320.5],
+    ['current advancia', 1500.75],
+    ['amex', 210.4],
+    ['sachin', 80.25],
+  ])
+  // "Scratch note"/"see notes" (I8/J8) is non-numeric → not captured, and no
+  // issue either (deliberate spec exception for the free-form scratch areas).
+  expect(ij.some((s) => s.normLabel === 'scratch note')).toBe(false)
+  expect(m.issues.some((i) => i.cell === 'J8')).toBe(false)
+})
+
+it('v2025 scratch: KL pairs captured; #REF! value skipped with no issue', () => {
+  const m = parseMonth('JUN_25', JUN_25 as any)
+  const kl = (m.scratch ?? []).filter((s) => s.block === 'KL')
+  expect(kl.map((s) => [s.normLabel, s.amountEUR])).toEqual([
+    ['balance', 1650],
+    ['sachin', 900.6],
+  ])
+  expect(kl.some((s) => s.normLabel === 'broken')).toBe(false)
+  expect(m.issues.some((i) => i.kind === 'ref-error' && i.cell?.startsWith('L'))).toBe(false)
+})
+
+it('scratch excludes the Expected-Actual / Balance-after rows (dedicated fields already)', () => {
+  const m = parseMonth('JUN_25', JUN_25 as any)
+  const norms = (m.scratch ?? []).map((s) => s.normLabel)
+  expect(norms.some((n) => n.startsWith('expected-actual'))).toBe(false)
+  expect(norms.some((n) => n.startsWith('balance after future expense'))).toBe(false)
+})
+
+it('2019v1 (no bank block): scratch is empty, not undefined', () => {
+  const m = parseMonth('JAN', JAN as any)
+  expect(m.scratch).toEqual([])
+})
+
 it('full era (JAN_22): missing upcoming Total marker STILL issues — upcoming stays required', () => {
   const broken = JSON.parse(JSON.stringify(JAN_22)) as any
   broken.values[7][12] = 'Totall' // M8, the upcoming Total marker for JAN_22 (see month-summary/banks-upcoming fixtures)
