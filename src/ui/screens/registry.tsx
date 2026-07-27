@@ -13,7 +13,10 @@ import type { BinanceData } from '../../parse/binance'
 import type { AppState } from '../../state/appState'
 import type { MonthData, ParserIssue, PersonLedger, Trip } from '../../types'
 
-export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' | 'trips' | 'logs' | 'goals' | 'health'
+// 'trips' stays a valid ScreenId (its registry entry + screen code are
+// kept), but it is HIDDEN — removed from SCREEN_ORDER 2026-07-27 (owner
+// request), with 'badminton' taking its slot.
+export type ScreenId = 'overview' | 'budget' | 'trends' | 'networth' | 'sachin' | 'trips' | 'badminton' | 'logs' | 'goals' | 'health'
 
 /** Superset of props every screen may need. Concrete screens (Overview,
  * ParserHealth) destructure what they use; placeholders ignore all but
@@ -132,6 +135,16 @@ function IconTrips(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+function IconBadminton(props: SVGProps<SVGSVGElement>) {
+  // Shuttlecock: cork circle + feather fan.
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="6" cy="14" r="2.4" />
+      <path d="M8 12 15.5 4.5M8.8 12.8 16.5 8M7.2 11.2 12 3.5" />
+    </svg>
+  )
+}
+
 function IconLogs(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -169,7 +182,7 @@ const overviewComponent = lazy(async () => {
   const { Overview } = await import('../Overview')
   return {
     default: (p: ScreenProps) => (
-      <Overview months={p.months} selectedMonth={p.selectedMonth} plan={p.plan} appState={p.appState} />
+      <Overview months={p.months} selectedMonth={p.selectedMonth} plan={p.plan} appState={p.appState} sachin={p.sachin} />
     ),
   }
 })
@@ -235,6 +248,13 @@ const tripsComponent = lazy(async () => {
   return { default: (p: ScreenProps) => <Trips trips={p.trips ?? null} /> }
 })
 
+const badmintonComponent = lazy(async () => {
+  const [{ Badminton }, { DEFAULT_STATE }] = await Promise.all([import('./Badminton'), import('../../state/appState')])
+  return {
+    default: (p: ScreenProps) => <Badminton plan={p.plan ?? null} fxRate={(p.appState ?? DEFAULT_STATE).fxRate} />,
+  }
+})
+
 const logsComponent = lazy(async () => {
   const { Logs } = await import('./Logs')
   return { default: (p: ScreenProps) => <Logs plan={p.plan ?? null} /> }
@@ -249,7 +269,9 @@ const goalsComponent = lazy(async () => {
   }
 })
 
-export const SCREEN_ORDER: ScreenId[] = ['overview', 'budget', 'trends', 'networth', 'sachin', 'trips', 'logs', 'goals', 'health']
+// 'trips' intentionally absent (hidden, not deleted — owner 2026-07-27);
+// 'badminton' occupies its former slot.
+export const SCREEN_ORDER: ScreenId[] = ['overview', 'budget', 'trends', 'networth', 'sachin', 'badminton', 'logs', 'goals', 'health']
 
 export const SCREEN_REGISTRY: Record<ScreenId, ScreenEntry> = {
   overview: { label: 'Overview', icon: IconOverview, component: overviewComponent },
@@ -258,6 +280,7 @@ export const SCREEN_REGISTRY: Record<ScreenId, ScreenEntry> = {
   networth: { label: 'Net worth', icon: IconNetworth, component: networthComponent },
   sachin: { label: 'Sachin', icon: IconSachin, component: sachinComponent },
   trips: { label: 'Trips', icon: IconTrips, component: tripsComponent },
+  badminton: { label: 'Badminton', icon: IconBadminton, component: badmintonComponent },
   logs: { label: 'Logs', icon: IconLogs, component: logsComponent },
   goals: { label: 'Goals', icon: IconGoals, component: goalsComponent },
   health: { label: 'Parser Health', icon: IconHealth, component: healthComponent },

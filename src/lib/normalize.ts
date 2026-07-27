@@ -15,6 +15,14 @@
 // new typo merge here as `<misspelled-normalized>: '<canonical-normalized>'`.
 const ALIASES: Record<string, string> = {
   advancia: 'advanzia',
+  // Owner's month-ledger card-payment rows are labeled "<card> CC"
+  // ("Advancia CC" D6, "Amex CC" D19 on the live JUL_26) — fold them onto
+  // the canonical card labels so exact-match categorize() lands them in the
+  // 'credit card' bucket and lib/cardDues.ts can sum payments per card
+  // (spec 2026-07-27 §2; they were silently 'uncategorized' before).
+  'advancia cc': 'advanzia',
+  'advanzia cc': 'advanzia',
+  'amex cc': 'amex',
   // Owner (2026-07-26): the sheet label "Amazon CC" IS the Sparkasse card —
   // merge it so credit-card grouping shows one Sparkasse row.
   'amazon cc': 'sparkasse',

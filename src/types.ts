@@ -27,12 +27,24 @@ export interface Tx {
 export interface BankAccount { name: string; amountEUR: number }
 export interface UpcomingItem { name: string; total: number | null; toPay: number | null }
 export interface MonthSummaryCells { totalIncome: number | null; totalExpense: number | null; balance: number | null; household: number | null }
+/** A label+number pair captured from the free-form scratch areas of a month
+ * tab (workbook-map.md §1.1 "free-form scratch" below the bank Total row for
+ * IJ; the K/L side block for KL). Owner uses these for live credit-card
+ * statement balances ("Current Advancia", "Amex", ...) that back the
+ * Overview card-dues rows (lib/cardDues.ts). Only rows where the value cell
+ * is a plain number are captured — everything else in scratch is skipped
+ * silently (spec 2026-07-27 §1, deliberate exception to the no-silent-drop
+ * rule for these two note areas). */
+export interface ScratchEntry { label: string; normLabel: string; amountEUR: number; block: 'IJ' | 'KL'; row: number }
 export interface MonthData {
   tab: string; period: Period; era: Era;
   income: Tx[]; expenses: Tx[]; carryover: number | null;
   summary: MonthSummaryCells; banks: BankAccount[]; bankTotal: number | null;
   expectedActual: number | null; balanceAfterFuture: number | null;
-  upcoming: UpcomingItem[]; issues: ParserIssue[]
+  upcoming: UpcomingItem[]; issues: ParserIssue[];
+  /** Optional so pre-existing tests/fixtures building MonthData literals
+   * stay valid; parseMonth always sets it (possibly empty). */
+  scratch?: ScratchEntry[]
 }
 
 // Plan 2 domain types (Task 2 brief) — produced by the special-tab parsers

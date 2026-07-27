@@ -4,7 +4,7 @@
 // cells through ParserIssue rather than throwing or silently dropping.
 import { tabToPeriod, eraOf } from '../lib/period'
 import { normLabel } from '../lib/normalize'
-import type { MonthData, Tx, ParserIssue, Period, BankAccount, UpcomingItem, Era } from '../types'
+import type { MonthData, Tx, ParserIssue, Period, BankAccount, UpcomingItem, Era, ScratchEntry } from '../types'
 
 export interface MonthGrids {
   values: (string | number | null)[][]
@@ -252,6 +252,44 @@ function parseBanksBlock(tab: string, values: (string | number | null)[][], issu
   return { banks, bankTotal, expectedActual, balanceAfterFuture }
 }
 
+/**
+ * Free-form scratch capture (spec 2026-07-27 §1): the owner keeps live
+ * credit-card statement balances and side tallies in two note areas —
+ * col I/J below the bank `Total` row, and a K/L side block. Only rows where
+ * the label cell is non-blank AND the value cell is a plain number are
+ * captured; every other cell (strings, blanks, #REF!, text-concat notes) is
+ * skipped with NO ParserIssue — a deliberate, documented exception to the
+ * no-silent-drop rule, because these areas are free-form by design
+ * (workbook-map.md marks them "ingest as notes only") and issuing on them
+ * would flood Parser Health with noise. The IJ scan excludes the
+ * `Expected-Actual` / `Balance After future Expense` rows, which already
+ * have dedicated MonthData fields.
+ *
+ * The KL scan runs for every era even though workbook-map only attests the
+ * K/L scratch block from Nov 2024+ — an old tab with unrelated K/L numbers
+ * would produce harmless extra entries (the only consumer, lib/cardDues.ts,
+ * looks up specific labels), and era-gating it would risk hiding real
+ * scratch if the owner backfills an older tab.
+ */
+function parseScratch(values: (string | number | null)[][], bankTotalRow: number): ScratchEntry[] {
+  const out: ScratchEntry[] = []
+  const push = (labelCol: string, valueCol: string, row: number, block: ScratchEntry['block']) => {
+    const labelRaw = cell(values, `${labelCol}${row}`)
+    if (isBlank(labelRaw)) return
+    const label = String(labelRaw).trim()
+    const norm = normLabel(label)
+    if (block === 'IJ' && (norm.startsWith(EXPECTED_ACTUAL_LABEL) || norm.startsWith(BALANCE_AFTER_FUTURE_LABEL))) return
+    const valueRaw = cell(values, `${valueCol}${row}`)
+    if (typeof valueRaw !== 'number') return
+    out.push({ label, normLabel: norm, amountEUR: valueRaw, block, row })
+  }
+  if (bankTotalRow !== -1) {
+    for (let row = bankTotalRow + 1; row <= BANK_LAST_ROW; row++) push('I', 'J', row, 'IJ')
+  }
+  for (let row = 2; row <= BANK_LAST_ROW; row++) push('K', 'L', row, 'KL')
+  return out
+}
+
 /** Upcoming block (workbook-map.md §1.1): col M name / N total / O to-pay,
  * rows 2..{UPCOMING_LAST_ROW}, terminated by the `Total` label (row *varies*
  * per workbook-map.md §1.4 — always locate by label). Missing `Total`
@@ -320,7 +358,7 @@ function emptyMonthData(tab: string, period: Period, era: MonthData['era'], issu
     summary: { totalIncome: null, totalExpense: null, balance: null, household: null },
     banks: [], bankTotal: null,
     expectedActual: null, balanceAfterFuture: null,
-    upcoming: [], issues,
+    upcoming: [], issues, scratch: [],
   }
 }
 
@@ -360,9 +398,17 @@ export function parseMonth(tab: string, grids: MonthGrids): MonthData {
     upcoming = parseUpcomingBlock(tab, values, issues, upcomingRequiredFor(era))
   }
 
+  // Re-locating the bank Total marker here (rather than threading it out of
+  // parseBanksBlock) keeps that function's signature untouched; the scan is
+  // a trivial ≤58-row loop. totalRow -1 (no banks / marker missing) just
+  // means no IJ scratch — the KL side block is scanned regardless, since it
+  // isn't anchored to the bank block at all.
+  const bankTotalRow = banksExpectedFor(era) ? findLabelRow(values, 'I', BANK_LAST_ROW, TOTAL_LABEL) : -1
+  const scratch = parseScratch(values, bankTotalRow)
+
   const base = emptyMonthData(tab, period, era, issues)
   return {
     ...base, income, expenses, carryover, summary,
-    banks, bankTotal, expectedActual, balanceAfterFuture, upcoming,
+    banks, bankTotal, expectedActual, balanceAfterFuture, upcoming, scratch,
   }
 }

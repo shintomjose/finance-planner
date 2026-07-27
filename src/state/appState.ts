@@ -18,7 +18,7 @@ export interface Goal {
 
 export interface AppState {
   categoryOverrides: Record<string, string> // normLabel -> category
-  fxRate: number // ₹ per €, default 100
+  fxRate: number // ₹ per €, default 92 (owner, 2026-07-27)
   goals: Goal[]
   recurringConfirmed: string[] // normLabels confirmed as recurring
 }
@@ -47,13 +47,13 @@ function deepFreeze<T>(obj: T): T {
 // instead, which builds independent objects — never derived from this one.
 export const DEFAULT_STATE: AppState = deepFreeze<AppState>({
   categoryOverrides: {},
-  fxRate: 100,
+  fxRate: 92,
   goals: [],
   recurringConfirmed: [],
 })
 
 function freshDefault(): AppState {
-  return { categoryOverrides: {}, fxRate: 100, goals: [], recurringConfirmed: [] }
+  return { categoryOverrides: {}, fxRate: 92, goals: [], recurringConfirmed: [] }
 }
 
 const STORAGE_KEY = 'fp-state-v1'
