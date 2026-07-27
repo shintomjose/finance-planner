@@ -323,6 +323,18 @@ export function Overview({
             {cardRows.length === 0 ? 'no card payments booked yet' : cardRows.map((r) => `${r.label} ${fmtEUR(r.amountEUR)}`).join(' · ')}
           </div>
         </div>
+        {/* Debt / Credit (owner 2026-07-27, hoisted to the hero band same
+            day): net position after savings and expected income cover the
+            upcoming expenses. */}
+        <div className="hero-cell" data-tone={netDebt > 0 ? 'bad' : 'good'}>
+          <div className="kicker">{netDebt > 0 ? 'Net debt' : 'Net credit'}</div>
+          <div className="hero-value num" style={{ color: netDebt > 0 ? 'var(--red)' : 'var(--green)' }}>
+            <Money amountEUR={Math.abs(netDebt)} tabular />
+          </div>
+          <div className="hero-note num">
+            {fmtEUR(toPayTotal)} upcoming − {fmtEUR(bankTotal)} savings − {fmtEUR(expectedTotal)} expected
+          </div>
+        </div>
       </div>
 
       <div className="overview-grid">
@@ -687,38 +699,6 @@ export function Overview({
           )}
         </div>
 
-        {/* Debt / Credit (owner 2026-07-27): net position after savings and
-            expected income cover the upcoming expenses. */}
-        <div className="panel2" data-tint={netDebt > 0 ? 'red' : 'green'}>
-          <div className="panel2-head">
-            <span>Debt / Credit</span>
-            <span className="panel2-meta">net position</span>
-          </div>
-          <div className="dg-row" style={{ gridTemplateColumns: BANK_COLS }}>
-            <span>Upcoming expenses (dues + bills)</span>
-            <span className="right">
-              <Money amountEUR={toPayTotal} tabular />
-            </span>
-          </div>
-          <div className="dg-row" style={{ gridTemplateColumns: BANK_COLS }}>
-            <span>Total savings</span>
-            <span className="right">
-              −<Money amountEUR={bankTotal} tabular />
-            </span>
-          </div>
-          <div className="dg-row" style={{ gridTemplateColumns: BANK_COLS }}>
-            <span>Expected income</span>
-            <span className="right">
-              −<Money amountEUR={expectedTotal} tabular />
-            </span>
-          </div>
-          <div className="dg-foot" style={{ gridTemplateColumns: BANK_COLS }}>
-            <span>{netDebt > 0 ? 'Net debt' : 'Net credit'}</span>
-            <span className="right" style={{ color: netDebt > 0 ? 'var(--red)' : 'var(--green)' }}>
-              <Money amountEUR={Math.abs(netDebt)} tabular />
-            </span>
-          </div>
-        </div>
       </div>
       </div>
     </div>
