@@ -25,30 +25,48 @@ function newestFirst(rows: LedgerRow[]): LedgerRow[] {
   return [...dated, ...undated]
 }
 
-function LedgerTable({ rows, caption }: { rows: LedgerRow[]; caption: string }) {
-  if (rows.length === 0) return <EmptyState message={`No ${caption.toLowerCase()} entries.`} />
+const LEDGER_COLS = '118px 1fr 110px'
+
+/** One side of the Given/Repayments split (owner 2026-07-31): panel with a
+ * scrolling row body and a Total footer that stays fixed below the scroll
+ * area, so the recomputed total is always visible regardless of scroll
+ * position. */
+function LedgerPanel({ rows, caption, totalEUR }: { rows: LedgerRow[]; caption: string; totalEUR: number | null }) {
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Label</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {newestFirst(rows).map((r) => (
-            <tr key={r.row}>
-              <td>{r.date ?? '–'}</td>
-              <td>{r.label}</td>
-              <td>
-                <Money amountEUR={r.amountEUR} tabular />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="panel2">
+      <div className="panel2-head">
+        <span>{caption}</span>
+        <span className="panel2-meta">{rows.length} entries</span>
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState message={`No ${caption.toLowerCase()} entries.`} />
+      ) : (
+        <>
+          <div className="dg-cols" style={{ gridTemplateColumns: LEDGER_COLS }}>
+            <span>Date</span>
+            <span>Label</span>
+            <span className="right">Amount</span>
+          </div>
+          <div className="ledger-scroll">
+            {newestFirst(rows).map((r) => (
+              <div className="dg-row" style={{ gridTemplateColumns: LEDGER_COLS }} key={r.row}>
+                <span className="num">{r.date ?? '–'}</span>
+                <span>{r.label}</span>
+                <span className="right">
+                  <Money amountEUR={r.amountEUR} tabular />
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="dg-foot" style={{ gridTemplateColumns: LEDGER_COLS }}>
+            <span>Total</span>
+            <span />
+            <span className="right">
+              <Money amountEUR={totalEUR} tabular />
+            </span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -136,13 +154,12 @@ export function Sachin({ sachin, issues }: SachinScreenProps) {
         )}
       </Section>
 
-      <Section title="Given">
-        <LedgerTable rows={ledger.entries} caption="Given" />
-      </Section>
-
-      <Section title="Repayments">
-        <LedgerTable rows={ledger.repayments} caption="Repayment" />
-      </Section>
+      {/* Given / Repayments side by side (owner 2026-07-31); each body
+          scrolls independently, totals pinned below the scroll area. */}
+      <div className="sachin-ledger-grid">
+        <LedgerPanel rows={ledger.entries} caption="Given" totalEUR={given} />
+        <LedgerPanel rows={ledger.repayments} caption="Repayments" totalEUR={repaid} />
+      </div>
     </div>
   )
 }

@@ -41,9 +41,20 @@ const FIRST_DATA_ROW = 2
 // M39:N42 summary block below).
 const LAST_DATA_ROW = 37
 
+export interface FundTotal {
+  fund: string
+  investedINR: number | null
+}
+
 export interface MutualFundsData {
   snapshots: InvestmentSnapshot[]
   summary: { investedINR: number | null; currentINR: number | null; pctChange: number | null }
+  /** Per-fund row-38 invested totals (owner 2026-07-31: "SUM of C38, F38,
+   * I38, K38, O38, S38, U38, W38" — the two SOLD funds excluded), with the
+   * fund heading read from row 1. ₹. */
+  fundTotals: FundTotal[]
+  /** Σ fundTotals (nulls contribute nothing); null when every cell missing. */
+  investedTotalINR: number | null
   issues: ParserIssue[]
 }
 
@@ -111,6 +122,36 @@ function parseFundGroup(
   return out
 }
 
+const TOTAL_ROW = 38
+
+/** One column letter to the right (A..W input — the grid ends at X). */
+const nextCol = (col: string): string => String.fromCharCode(col.charCodeAt(0) + 1)
+
+/** Per-fund invested totals off the row-38 TOTAL row (owner 2026-07-31),
+ * SOLD groups excluded. The owner's cells are the group's amount column
+ * for the three SIP groups (C/F/I) and the group's FIRST column for the
+ * lump groups (K/O/S/U/W); on grids where that first cell carries the
+ * "TOTAL" label instead of the figure (the synthetic fixture does), the
+ * cell one to the right is used. A non-numeric pair yields null silently —
+ * the label strings living in this row are expected, not bad data. Heading
+ * comes from the group's row-1 title cell, falling back to the canonical
+ * asset name. */
+function parseFundTotals(values: (string | number | null)[][]): { fundTotals: FundTotal[]; investedTotalINR: number | null } {
+  const fundTotals: FundTotal[] = []
+  for (const group of FUND_GROUPS) {
+    if (group.sold) continue
+    const headingRaw = cellAt(values, `${group.dateCol}1`)
+    const fund = typeof headingRaw === 'string' && !isBlank(headingRaw) ? headingRaw.trim() : group.asset
+    const primaryCol = group.amountCol ?? group.dateCol
+    const candidates = [cellAt(values, `${primaryCol}${TOTAL_ROW}`), cellAt(values, `${nextCol(primaryCol)}${TOTAL_ROW}`)]
+    const investedINR = candidates.find((v): v is number => typeof v === 'number') ?? null
+    fundTotals.push({ fund, investedINR })
+  }
+  const known = fundTotals.filter((f) => f.investedINR != null)
+  const investedTotalINR = known.length ? known.reduce((s, f) => s + (f.investedINR ?? 0), 0) : null
+  return { fundTotals, investedTotalINR }
+}
+
 /** Summary block M39:N42: N39 invested, N40 current, N41 pct change. */
 function parseSummary(values: (string | number | null)[][], issues: ParserIssue[]): MutualFundsData['summary'] {
   return {
@@ -132,6 +173,7 @@ export function parseMutualFunds(grids: SpecialGrids): MutualFundsData {
 
   const snapshots = FUND_GROUPS.flatMap((group) => parseFundGroup(values, issues, group))
   const summary = parseSummary(values, issues)
+  const { fundTotals, investedTotalINR } = parseFundTotals(values)
 
-  return { snapshots, summary, issues }
+  return { snapshots, summary, fundTotals, investedTotalINR, issues }
 }

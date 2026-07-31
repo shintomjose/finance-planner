@@ -35,13 +35,13 @@ export function CategoryLine({ data, xKey, series, height = 260, valueFormatter 
           <XAxis
             dataKey={xKey}
             stroke={palette.axis}
-            tick={{ fill: palette.textMuted, fontSize: 12 }}
+            tick={{ fill: palette.textMuted, fontSize: 13 }}
             tickLine={false}
             axisLine={{ stroke: palette.axis }}
           />
           <YAxis
             stroke={palette.axis}
-            tick={{ fill: palette.textMuted, fontSize: 12 }}
+            tick={{ fill: palette.textMuted, fontSize: 13 }}
             tickLine={false}
             axisLine={false}
             width={48}

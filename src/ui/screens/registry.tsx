@@ -182,7 +182,15 @@ const overviewComponent = lazy(async () => {
   const { Overview } = await import('../Overview')
   return {
     default: (p: ScreenProps) => (
-      <Overview months={p.months} selectedMonth={p.selectedMonth} plan={p.plan} appState={p.appState} />
+      <Overview
+        months={p.months}
+        selectedMonth={p.selectedMonth}
+        plan={p.plan}
+        appState={p.appState}
+        mutualFunds={p.mutualFunds}
+        deutscheBank={p.deutscheBank}
+        binance={p.binance}
+      />
     ),
   }
 })
@@ -249,9 +257,9 @@ const tripsComponent = lazy(async () => {
 })
 
 const badmintonComponent = lazy(async () => {
-  const [{ Badminton }, { DEFAULT_STATE }] = await Promise.all([import('./Badminton'), import('../../state/appState')])
+  const { Badminton } = await import('./Badminton')
   return {
-    default: (p: ScreenProps) => <Badminton plan={p.plan ?? null} fxRate={(p.appState ?? DEFAULT_STATE).fxRate} />,
+    default: (p: ScreenProps) => <Badminton plan={p.plan ?? null} />,
   }
 })
 

@@ -28,6 +28,7 @@
   --brick: #a8604f;
   --blue: #7fb7ff;
   --amber: #c9a45e;
+  --violet: #a695f0;
   --track: #1a1d23;
   --accent: #7fb7ff;
   --accent-ink: #0a0b0d;
@@ -75,6 +76,7 @@
   --brick: #a05240;
   --blue: #2a6fc0;
   --amber: #9a7728;
+  --violet: #6a53c4;
   --track: #e6e6e2;
   --accent: #2a6fc0;
   --accent-ink: #ffffff;
@@ -105,12 +107,14 @@
   /* --- Type (theme-invariant) --- */
   --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Noto Serif', serif;
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --text-2xs: 0.6875rem;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.9375rem;
-  --text-md: 1.0625rem;
-  --text-lg: 1.375rem;
+  /* Scale bumped +1px per step (owner 2026-07-31: bigger text everywhere);
+     xl/2xl display sizes already large enough, left as-is. */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.4375rem;
   --text-xl: 1.75rem;
   --text-2xl: 2.1rem;
 
@@ -166,7 +170,8 @@ button {
   flex-direction: column;
   gap: 14px;
   width: 100%;
-  max-width: 88rem;
+  /* Owner 2026-07-31: use wide screens — was 88rem (1408px). */
+  max-width: 110rem;
   margin: 0 auto;
   padding: 18px 22px 40px;
 }
@@ -214,7 +219,7 @@ button {
 }
 
 .kicker {
-  font-size: 10.5px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--faint);
@@ -271,7 +276,7 @@ button {
   background: var(--status-critical);
   color: #ffffff;
   font-family: var(--font-sans);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 700;
   line-height: 1rem;
 }
@@ -290,7 +295,7 @@ button {
   color: var(--text-2);
   border-radius: 6px;
   padding: 5px 10px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1;
   cursor: pointer;
 }
@@ -1409,9 +1414,9 @@ tr[data-drift='true'] td {
    --------------------------------------------------------------------- */
 
 .theme-toggle { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
-.refresh-btn { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; }
+.refresh-btn { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; }
 .refresh-btn:hover { color: var(--text); }
-.theme-toggle-btn { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 13px; line-height: 1; }
+.theme-toggle-btn { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 14px; line-height: 1; }
 .theme-toggle-btn.active { background: var(--accent-wash); color: var(--text); }
 
 /* ---------------------------------------------------------------------
@@ -1421,7 +1426,7 @@ tr[data-drift='true'] td {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1446,6 +1451,16 @@ tr[data-drift='true'] td {
   border-radius: 10px;
   padding: 13px 14px;
 }
+
+/* Per-KPI identity wash (owner 2026-07-31): a soft gradient from the
+   tile's semantic color into the surface, same color-mix language as the
+   panel tints. Semantics: income/cash green (money held), expenses red,
+   saved blue (savings), upcoming amber, net worth violet. */
+.kpi-card[data-kpi] { border-color: color-mix(in srgb, var(--kpi-c, var(--border)) 32%, var(--border)); background: linear-gradient(150deg, color-mix(in srgb, var(--kpi-c, var(--surface)) 15%, var(--surface)) 0%, var(--surface) 70%); }
+.kpi-card[data-kpi='income'] { --kpi-c: var(--green); }
+.kpi-card[data-kpi='expenses'] { --kpi-c: var(--red); }
+.kpi-card[data-kpi='saved'] { --kpi-c: var(--blue); }
+.kpi-card[data-kpi='cash'] { --kpi-c: var(--green); }
 
 .kpi-value {
   font-size: var(--text-lg);
@@ -1495,15 +1510,15 @@ tr[data-drift='true'] td {
    --------------------------------------------------------------------- */
 
 .panel2 { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.panel2-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 600; }
+.panel2-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; font-weight: 600; }
 /* Panel component's (shared.tsx) scrollable content area — Overview/
    Budget/Trends don't need this since they lay dg-row/dg-cols/dg-foot
    directly under panel2-head with their own per-row padding; Panel is the
    one panel2 consumer whose body is arbitrary caller content, so it gets
    its own padded, independently-scrolling region instead. */
 .panel2-body { padding: 12px 14px; overflow-y: auto; }
-.panel2-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); font-weight: 400; }
-.dg-cols { display: grid; align-items: center; padding: 7px 14px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--border-row); }
+.panel2-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+.dg-cols { display: grid; align-items: center; padding: 7px 14px; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--border-row); }
 .dg-row { display: grid; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border-row); }
 .dg-row.clickable { cursor: pointer; }
 .dg-row.clickable:hover { background: var(--surface-2); }
@@ -1522,24 +1537,70 @@ tr[data-drift='true'] td {
 /* Hero band (spec 2026-07-27 §6): lifetime income + household average +
    card payments booked this month (ex "Credit card bills" panel) +
    debt/credit net position. */
-.hero-band { display: grid; grid-template-columns: 1.3fr 1.1fr 1fr 1fr; gap: 14px; }
+.hero-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .hero-cell[data-tone='bad'] { background: color-mix(in srgb, var(--red) 12%, var(--surface)); border-color: color-mix(in srgb, var(--red) 35%, var(--border)); }
 .hero-cell[data-tone='good'] { background: color-mix(in srgb, var(--green) 12%, var(--surface)); border-color: color-mix(in srgb, var(--green) 35%, var(--border)); }
+/* Per-tile identity wash (owner 2026-07-31) — same gradient language as
+   the KPI cards. Net debt/credit keeps its stronger data-tone wash. */
+.hero-cell[data-hero] { border-color: color-mix(in srgb, var(--hero-c, var(--border)) 32%, var(--border)); background: linear-gradient(150deg, color-mix(in srgb, var(--hero-c, var(--surface)) 15%, var(--surface)) 0%, var(--surface) 70%); }
+.hero-cell[data-hero='income'] { --hero-c: var(--green); }
+.hero-cell[data-hero='household'] { --hero-c: var(--red); }
+.hero-cell[data-hero='cardpaid'] { --hero-c: var(--blue); }
+.hero-cell[data-hero='cardleft'] { --hero-c: var(--amber); }
+.hero-cell[data-hero='invest'] { --hero-c: var(--violet); }
 .hero-cell { display: flex; flex-direction: column; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
 .hero-value { font-family: var(--mono); font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
-.hero-sub { font-family: var(--mono); font-size: 15px; }
-.hero-rate { color: var(--muted); font-size: 11px; }
-.hero-note { font-size: 11.5px; color: var(--muted); }
+.hero-sub { font-family: var(--mono); font-size: 16px; }
+.hero-rate { color: var(--muted); font-size: 12px; }
+.hero-note { font-size: 12.5px; color: var(--muted); }
+/* Per-card breakdown rows in the credit-card hero tile: label left,
+   amount right, tight stack. */
+.hero-note-row { display: flex; justify-content: space-between; gap: 10px; }
 @media (max-width: 1100px) {
   .hero-band { grid-template-columns: 1fr; }
 }
 
+/* Hero-first mode (owner 2026-07-31): Overview opens tiles-only — bigger
+   tiles filling the width; the detail grid appears via the toggle below,
+   at which point the band drops back to its exact compact layout above. */
+.overview-hero-only .hero-band { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.overview-hero-only .hero-cell { padding: 30px 32px; gap: 9px; }
+.overview-hero-only .hero-cell .kicker { font-size: 13px; }
+.overview-hero-only .hero-value { font-size: 46px; }
+.overview-hero-only .hero-sub { font-size: 20px; }
+.overview-hero-only .hero-rate { font-size: 14px; }
+.overview-hero-only .hero-note { font-size: 15px; }
+@media (max-width: 1100px) {
+  .overview-hero-only .hero-band { grid-template-columns: 1fr; }
+}
+
+.overview-toggle-row { display: flex; justify-content: center; }
+.overview-toggle {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: var(--radius-pill);
+  padding: 8px 22px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.overview-toggle:hover { background: var(--accent-wash); color: var(--text); }
+
+/* Owner 2026-07-31: every row in the detail grid gets a clearly visible
+   bottom border — the default --border-row hairline washes out on the
+   tinted panels. */
+.overview-grid .dg-row,
+.overview-grid .dg-note,
+.overview-grid .dg-inset-row { border-bottom: 1px solid var(--border); }
+
 /* Category names read as sheet-style tags (owner: all uppercase). */
-.cat-label { text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.04em; }
+.cat-label { text-transform: uppercase; font-size: 12.5px; letter-spacing: 0.04em; }
 
 /* Card & person dues rows (Upcoming panel): label + formula note stacked. */
 .dues-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.dues-note { font-size: 10.5px; color: var(--muted); }
+.dues-note { font-size: 11.5px; color: var(--muted); }
 
 /* Savings-progress month labels must never wrap into two lines (owner:
    "months are overflown") — the column is sized to fit "Feb '26" whole. */
@@ -1552,10 +1613,14 @@ tr[data-drift='true'] td {
 .dg-cols > * + *, .dg-row > * + *, .dg-foot > * + * { border-left: 1px solid var(--border-row); padding-left: 10px; }
 .dg-row > .dot + *, .dg-cols > .dot-spacer + *, .dg-foot > .dot-spacer + * { border-left: 0; }
 
-.badminton-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
-@media (max-width: 1100px) {
-  .badminton-grid { grid-template-columns: 1fr; }
-}
+/* Single € panel since 2026-07-31 (₹ India block dropped on owner
+   request) — constrained width so bars stay readable on the wide shell. */
+.badminton-grid { display: grid; grid-template-columns: minmax(0, 860px); gap: 14px; align-items: start; justify-content: center; }
+.gear-rank { color: var(--faint); font-family: var(--mono); font-size: 12px; }
+.gear-item { font-weight: 600; }
+.gear-pct { color: var(--muted); font-size: 12.5px; }
+.gear-row { padding-top: 10px; padding-bottom: 10px; }
+.gear-row:hover { background: var(--accent-wash); }
 
 /* Semantic panel tints (owner request 2026-07-27: "sections need separate
    backgrounds — income green, banks greenish, expenses bit red"). A faint
@@ -1582,7 +1647,7 @@ tr[data-drift='true'] td {
    the only two datagrid primitives Budget needed that Overview didn't. */
 .dg-search {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -1593,13 +1658,25 @@ tr[data-drift='true'] td {
 .dg-search:focus { outline: none; border-color: var(--accent); }
 .dg-body-scroll { max-height: 660px; overflow-y: auto; }
 
+/* Sachin Given/Repayments split (owner 2026-07-31): two panels side by
+   side; each row body scrolls on its own while the dg-foot Total below
+   stays fixed and visible. */
+.sachin-ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.ledger-scroll { max-height: 480px; overflow-y: auto; }
+/* Zebra rows (owner 2026-07-31) — every other ledger row gets the inset
+   surface so long scrolls stay traceable. */
+.ledger-scroll > .dg-row:nth-child(even) { background: var(--surface-2); }
+@media (max-width: 1100px) {
+  .sachin-ledger-grid { grid-template-columns: 1fr; }
+}
+
 /* State modifiers layered on the datagrid primitives above: a muted
    separator row (carryover / food-budget-remaining — excluded from
    their panel's total, so visually de-emphasized) and the negative-
    coverage red border tint on Upcoming's panel2, matching the
    `data-tone` convention already used by .stat-card/.pacing-bar/etc. */
 .dg-row.muted { color: var(--muted); font-style: italic; }
-.dg-note { padding: 8px 14px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--border-row); }
+.dg-note { padding: 8px 14px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--border-row); }
 .panel2[data-tone='bad'] { border-color: var(--brick); }
 
 /* A row inside `.dg-inset` (a category/income-group/upcoming-provider
@@ -1607,6 +1684,6 @@ tr[data-drift='true'] td {
    hairline meant for a panel's top-level row list; nested inside
    `.dg-inset`'s own padding that hairline read as a stray extra rule
    between items. */
-.dg-inset-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid var(--border-row); }
+.dg-inset-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 14.5px; border-bottom: 1px solid var(--border-row); }
 .dg-inset-row:last-child { border-bottom: 0; }
 .dg-inset-row.muted { color: var(--muted); font-style: italic; }

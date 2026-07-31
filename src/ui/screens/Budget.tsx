@@ -162,7 +162,7 @@ export function Budget({ months, plan, state, now, selectedMonth }: BudgetScreen
                     <span>{row.category}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <BarMeter pct={row.pctOfBudget} color={usageColor(row.pctOfBudget)} />
-                      <span className="num" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      <span className="num" style={{ fontSize: 12, color: 'var(--muted)' }}>
                         {fmtPct(row.pctOfBudget)}
                       </span>
                     </span>

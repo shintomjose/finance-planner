@@ -28,6 +28,16 @@ export interface MonthlyPlanData {
   savingsSnapshots: { label: string; amountEUR: number | null }[]
   projection: { ratePct: number | null; yearlyContribution: number | null; rows: { year: number | null; valueEUR: number | null }[] }
   sbiLife: { date: string | null; amountINR: number | null }[]
+  /** Shinto's SBI Life total — C61 (owner correction 2026-07-31 #3: G8 is
+   * the combined family total and would double-count Sandra, so it is NOT
+   * read; C61 under the schedule is Shinto's own). The synthetic fixture's
+   * footer sits at row 62, so a short label-tolerant scan of rows 61-70
+   * covers both. ₹. */
+  shintoSbiLifeINR: number | null
+  /** SANDRA SBI LIFE block (owner 2026-07-31): located by header label
+   * anywhere in the grid — dated ₹ contributions + the block's own TOTAL.
+   * Absent block → empty rows, null total (no issue: optional block). */
+  sandraSbiLife: { rows: { date: string | null; amountINR: number | null }[]; totalINR: number | null }
   logs: LogEntry[]
   upstocks: InvestmentSnapshot[]
   issues: ParserIssue[]
@@ -289,6 +299,72 @@ function parseSbiBlock(values: (string | number | null)[][], issues: ParserIssue
   return out
 }
 
+/** Column index → A1 letter (grid is A..R, single letters suffice). */
+const colName = (c: number): string => String.fromCharCode(65 + c)
+
+/**
+ * Shinto's SBI Life total — C61 on the live sheet (owner 2026-07-31 #3);
+ * the fixture's "Total" footer sits at row 62, so rows 61-70 are scanned:
+ * the first numeric-bearing C cell that is row 61 itself or Total-labelled
+ * in B wins. Nothing found → null, no issue.
+ */
+function parseShintoSbiLife(values: (string | number | null)[][], issues: ParserIssue[]): number | null {
+  for (let row = 61; row <= 70; row++) {
+    const amountRaw = cell(values, `C${row}`)
+    if (isBlank(amountRaw)) continue
+    const labelRaw = cell(values, `B${row}`)
+    const isTotalLabel = typeof labelRaw === 'string' && /total/i.test(labelRaw)
+    if (row === 61 || isTotalLabel) return readNumber(values, `C${row}`, issues)
+  }
+  return null
+}
+
+/**
+ * SANDRA SBI LIFE block (owner 2026-07-31): position unknown/unpinned, so
+ * the header cell is located by label scan over the whole grid (parser
+ * rule: locate by label where position varies). Layout below the header:
+ * date in the header's own column, ₹ amount one column right; blank rows
+ * are skipped; a row whose label cell contains "total" ends the block and
+ * supplies `totalINR`. Missing header → empty result, no issue.
+ */
+function parseSandraSbiBlock(
+  values: (string | number | null)[][],
+  issues: ParserIssue[],
+): MonthlyPlanData['sandraSbiLife'] {
+  let headerRow = -1
+  let headerCol = -1
+  outer: for (let r = 0; r < values.length; r++) {
+    const rowVals = values[r] ?? []
+    for (let c = 0; c < rowVals.length; c++) {
+      const v = rowVals[c]
+      if (typeof v === 'string' && /sandra/i.test(v) && /sbi/i.test(v)) {
+        headerRow = r + 1
+        headerCol = c
+        break outer
+      }
+    }
+  }
+  if (headerRow < 0) return { rows: [], totalINR: null }
+
+  const rows: { date: string | null; amountINR: number | null }[] = []
+  let totalINR: number | null = null
+  for (let row = headerRow + 1; row <= headerRow + 40; row++) {
+    const labelRef = `${colName(headerCol)}${row}`
+    const amountRef = `${colName(headerCol + 1)}${row}`
+    const labelRaw = cell(values, labelRef)
+    const amountRaw = cell(values, amountRef)
+    if (isBlank(labelRaw) && isBlank(amountRaw)) continue
+    if (typeof labelRaw === 'string' && /total/i.test(labelRaw)) {
+      totalINR = readNumber(values, amountRef, issues)
+      break
+    }
+    const date = readDate(values, labelRef, issues)
+    const amountINR = readNumber(values, amountRef, issues)
+    rows.push({ date, amountINR })
+  }
+  return { rows, totalINR }
+}
+
 /**
  * Badminton gear (EUR) block, real layout (correction #5, live-run
  * 2026-07-26): F = item LABEL (no dates in this block at all), G =
@@ -428,6 +504,8 @@ export function parseMonthlyPlan(grids: SpecialGrids): MonthlyPlanData {
   const savingsSnapshots = parseSavingsBlock(values, issues)
   const projection = parseProjectionBlock(values, issues)
   const sbiLife = parseSbiBlock(values, issues)
+  const shintoSbiLifeINR = parseShintoSbiLife(values, issues)
+  const sandraSbiLife = parseSandraSbiBlock(values, issues)
   const gearEUR = parseGearEURBlock(values, issues)
   const gearINR = parseGearINRBlock(values, issues)
   const gym = parseGymBlock(values, issues)
@@ -437,6 +515,7 @@ export function parseMonthlyPlan(grids: SpecialGrids): MonthlyPlanData {
 
   return {
     budget, budgetTotals, loan, savingsSnapshots, projection, sbiLife,
+    shintoSbiLifeINR, sandraSbiLife,
     logs: [...gearEUR, ...gearINR, ...gym, ...petrol, ...alcohol],
     upstocks, issues,
   }
