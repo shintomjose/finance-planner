@@ -62,6 +62,36 @@ describe('lifetimeTotals', () => {
     expect(t.householdHigh).toEqual({ tab: 'D', period: { year: 2025, month: 4 }, amountEUR: 900 })
   })
 
+  it('trailing 3/6-month averages: last N by PERIOD (input order irrelevant), zero-months count in denominator', () => {
+    const mk = (tab: string, mo: number, household: number | null) =>
+      month(tab, [], { period: { year: 2025, month: mo }, summary: { totalIncome: null, totalExpense: null, balance: null, household } })
+    // Shuffled input on purpose — periods 1..7; households 100..700.
+    const months = [mk('E', 5, 500), mk('A', 1, 100), mk('G', 7, 700), mk('C', 3, 300), mk('B', 2, 200), mk('F', 6, null), mk('D', 4, 400)]
+    const t = lifetimeTotals(months)
+    expect(t.householdAvg3EUR).toBe(400) // (500 + 0 + 700) / 3 — month 6 has no data, still counts
+    expect(t.householdAvg6EUR).toBe(350) // (200+300+400+500+0+700) / 6
+  })
+
+  it('trailing averages skip the current in-progress month (owner: only completed months count)', () => {
+    const mk = (tab: string, mo: number, household: number) =>
+      month(tab, [], { period: { year: 2025, month: mo }, summary: { totalIncome: null, totalExpense: null, balance: null, household } })
+    const months = [mk('A', 5, 500), mk('B', 6, 600), mk('C', 7, 999)]
+    // "now" inside July 2025 → month 7 is in progress, excluded; window
+    // shrinks to the 2 completed months.
+    const t = lifetimeTotals(months, new Date(2025, 6, 15))
+    expect(t.householdAvg3EUR).toBe(550) // (500 + 600) / 2
+    // Lifetime average still counts ALL months — unchanged by this rule.
+    expect(t.householdAvgEUR).toBe(699.67)
+  })
+
+  it('trailing averages shrink the window when fewer months exist; null when none', () => {
+    const one = month('A', [], { summary: { totalIncome: null, totalExpense: null, balance: null, household: 420 } })
+    expect(lifetimeTotals([one]).householdAvg3EUR).toBe(420)
+    expect(lifetimeTotals([one]).householdAvg6EUR).toBe(420)
+    expect(lifetimeTotals([]).householdAvg3EUR).toBeNull()
+    expect(lifetimeTotals([]).householdAvg6EUR).toBeNull()
+  })
+
   it('null amounts (planned rows) contribute nothing', () => {
     const t = lifetimeTotals([month('A', [tx('Salary', null, 'income')])])
     expect(t.salaryEUR).toBe(0)

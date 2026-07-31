@@ -29,21 +29,29 @@ const upstocksSnapshot = (overrides: Partial<InvestmentSnapshot> = {}): Investme
   ...overrides,
 })
 
-const plan = (upstocks: InvestmentSnapshot[] = [], projection?: Partial<MonthlyPlanData['projection']>): MonthlyPlanData => ({
+const plan = (
+  upstocks: InvestmentSnapshot[] = [],
+  projection?: Partial<MonthlyPlanData['projection']>,
+  sbi?: { sandra?: MonthlyPlanData['sandraSbiLife']; totalINR?: number | null },
+): MonthlyPlanData => ({
   budget: [],
   budgetTotals: { income: null, expense: null, surplus: null },
   loan: { principal: null, termMonths: null, interestEUR: null, totalEUR: null, monthlyEUR: null, installments: [], paidToDate: null },
   savingsSnapshots: [],
   projection: { ratePct: null, yearlyContribution: null, rows: [], ...projection },
   sbiLife: [],
+  shintoSbiLifeINR: sbi?.totalINR ?? null,
+  sandraSbiLife: sbi?.sandra ?? { rows: [], totalINR: null },
   logs: [],
   upstocks,
   issues: [],
 })
 
-const mf = (investedINR: number | null, currentINR: number | null, pctChange: number | null = null): MutualFundsData => ({
+const mf = (investedTotalINR: number | null, fundTotals: MutualFundsData['fundTotals'] = []): MutualFundsData => ({
   snapshots: [],
-  summary: { investedINR, currentINR, pctChange },
+  summary: { investedINR: null, currentINR: null, pctChange: null },
+  fundTotals,
+  investedTotalINR,
   issues: [],
 })
 
@@ -79,55 +87,74 @@ describe('buildNetWorth — per-source aggregation', () => {
     expect(view.sources.find((s) => s.source === 'bank')?.valueEUR).toBeNull()
   })
 
-  it('db source sums the latest-dated valuation(s) as valueEUR, grandTotalEUR as investedEUR, and derives P/L', () => {
+  it('db source is the G91 PAID grand total (owner 2026-07-31), no invested/P/L pair', () => {
     const data = db(
-      [dbValuation('2024-01-01', 1000), dbValuation('2024-06-01', 1200), dbValuation('2024-06-01', 300)],
+      [dbValuation('2024-01-01', 1000), dbValuation('2024-06-01', 1200)], // valuations no longer drive the row
       1000,
     )
     const view = buildNetWorth(undefined, null, null, data, null, 100)
     const row = view.sources.find((s) => s.source === 'db')
-    expect(row?.valueEUR).toBe(1500) // 1200 + 300, both dated 2024-06-01 (the latest date)
-    expect(row?.investedEUR).toBe(1000)
-    expect(row?.plEUR).toBe(500)
-    expect(row?.plPct).toBe(50)
+    expect(row).toEqual({ source: 'db', label: 'Deutsche Bank (paid)', valueEUR: 1000, investedEUR: null, plEUR: null, plPct: null })
   })
 
   it('db source is all-null when db is not connected', () => {
     const view = buildNetWorth(undefined, null, null, null, null, 100)
     expect(view.sources.find((s) => s.source === 'db')).toEqual({
-      source: 'db', label: 'Deutsche Bank', valueEUR: null, investedEUR: null, plEUR: null, plPct: null,
+      source: 'db', label: 'Deutsche Bank (paid)', valueEUR: null, investedEUR: null, plEUR: null, plPct: null,
     })
   })
 
-  it('mf source converts INR summary figures via fxRate (₹ per €) and derives P/L', () => {
-    const data = mf(20000, 25000)
+  it('mf source is the row-38 invested total (owner 2026-07-31) converted via fxRate', () => {
+    const data = mf(25000)
     const view = buildNetWorth(undefined, null, data, null, null, 100)
     const row = view.sources.find((s) => s.source === 'mf')
-    expect(row?.investedEUR).toBe(200)
-    expect(row?.valueEUR).toBe(250)
-    expect(row?.plEUR).toBe(50)
-    expect(row?.plPct).toBe(25)
+    expect(row).toEqual({ source: 'mf', label: 'India Mutual Funds', valueEUR: 250, investedEUR: null, plEUR: null, plPct: null })
   })
 
   it('mf source is all-null with a non-positive fxRate (guarded), row still present', () => {
-    const data = mf(20000, 25000)
+    const data = mf(25000)
     const view = buildNetWorth(undefined, null, data, null, null, 0)
     expect(view.sources.find((s) => s.source === 'mf')).toEqual({
-      source: 'mf', label: 'Mutual Funds', valueEUR: null, investedEUR: null, plEUR: null, plPct: null,
+      source: 'mf', label: 'India Mutual Funds', valueEUR: null, investedEUR: null, plEUR: null, plPct: null,
     })
   })
 
   it('mf source is all-null with a non-finite fxRate (guarded)', () => {
-    const data = mf(20000, 25000)
+    const data = mf(25000)
     const view = buildNetWorth(undefined, null, data, null, null, NaN)
     expect(view.sources.find((s) => s.source === 'mf')?.valueEUR).toBeNull()
   })
 
-  it('binance source passes EUR figures straight through (no fx conversion) and derives P/L', () => {
+  it('sbi sources (owner 2026-07-31): Sandra uses her block TOTAL; Shinto converts C61 (G8 never used)', () => {
+    const p = plan([], undefined, {
+      sandra: { rows: [{ date: '2024-08-18', amountINR: 50000 }, { date: '2025-07-30', amountINR: 70000 }], totalINR: 120000 },
+      totalINR: 155000,
+    })
+    const view = buildNetWorth(undefined, p, null, null, null, 100)
+    expect(view.sources.find((s) => s.source === 'sbi-sandra')?.valueEUR).toBe(1200)
+    expect(view.sources.find((s) => s.source === 'sbi')?.valueEUR).toBe(1550)
+  })
+
+  it('sandra sbi falls back to summing her rows when the block TOTAL is missing', () => {
+    const p = plan([], undefined, {
+      sandra: { rows: [{ date: '2024-08-18', amountINR: 50000 }, { date: null, amountINR: 70000 }], totalINR: null },
+    })
+    const view = buildNetWorth(undefined, p, null, null, null, 100)
+    expect(view.sources.find((s) => s.source === 'sbi-sandra')?.valueEUR).toBe(1200)
+  })
+
+  it('sbi sources are all-null when the plan is not connected', () => {
+    const view = buildNetWorth(undefined, null, null, null, null, 100)
+    expect(view.sources.find((s) => s.source === 'sbi-sandra')?.valueEUR).toBeNull()
+    expect(view.sources.find((s) => s.source === 'sbi')?.valueEUR).toBeNull()
+  })
+
+  it('binance source passes EUR figures straight through and is display-only (owner 2026-07-31)', () => {
     const data = binance(400, 550)
     const view = buildNetWorth(undefined, null, null, null, data, 100)
     const row = view.sources.find((s) => s.source === 'binance')
-    expect(row).toEqual({ source: 'binance', label: 'Binance', valueEUR: 550, investedEUR: 400, plEUR: 150, plPct: 37.5 })
+    expect(row).toEqual({ source: 'binance', label: 'Binance', valueEUR: 550, investedEUR: 400, plEUR: 150, plPct: 37.5, displayOnly: true })
+    expect(view.totalEUR).toBe(0) // shown, never counted
   })
 
   it('upstocks source converts the latest snapshot valueINR via fxRate; investedEUR stays null (not distinguishable in the sheet)', () => {
@@ -151,17 +178,18 @@ describe('buildNetWorth — per-source aggregation', () => {
     expect(view.sources.find((s) => s.source === 'upstocks')?.valueEUR).toBeNull()
   })
 
-  it('totals sum only non-null valueEUR/investedEUR across sources', () => {
+  it('totals count only non-displayOnly sources (Binance/Upstocks shown but excluded)', () => {
     const view = buildNetWorth(
       month(1000), // bank: value 1000, invested null
-      plan([upstocksSnapshot({ valueINR: 20000 })]), // upstocks: value 200, invested null
-      mf(20000, 25000), // mf: value 250, invested 200
-      db([dbValuation('2024-01-01', 300)], 100), // db: value 300, invested 100
-      binance(50, 75), // binance: value 75, invested 50
+      plan([upstocksSnapshot({ valueINR: 20000 })], undefined, { totalINR: 10000 }), // upstocks 200 (display-only) + shinto sbi 100
+      mf(25000), // mf: value 250 (row-38 invested total)
+      db([dbValuation('2024-01-01', 300)], 100), // db: value 100 (G91 paid)
+      binance(50, 75), // binance: 75/50, display-only
       100,
     )
-    expect(view.totalEUR).toBe(1000 + 200 + 250 + 300 + 75)
-    expect(view.investedTotalEUR).toBe(200 + 100 + 50)
+    expect(view.totalEUR).toBe(1000 + 250 + 100 + 100)
+    expect(view.investedTotalEUR).toBe(0) // binance's invested 50 is display-only too
+    expect(view.nonBankTotalEUR).toBe(250 + 100 + 100) // counted sources minus bank cash
   })
 
   it('totals are 0 when every source is disconnected', () => {

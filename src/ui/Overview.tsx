@@ -50,13 +50,17 @@ import { cardDues, duesTotal, isDueCoveredUpcoming } from '../lib/cardDues'
 import { creditCardBills } from '../lib/creditCardBills'
 import { partitionUpcoming } from '../lib/foodHome'
 import { groupIncome } from '../lib/incomeGroups'
-import { lifetimeTotals } from '../lib/lifetimeTotals'
+import { householdOf, lifetimeTotals } from '../lib/lifetimeTotals'
 import { round2, sortByPeriod, sumAmounts } from '../lib/mathUtils'
+import { buildNetWorth } from '../lib/networth'
 import { categorize, normLabel } from '../lib/normalize'
 import { overviewFigures } from '../lib/overviewFigures'
 import { upcomingIncome } from '../lib/upcomingIncome'
 import { groupUpcoming } from '../lib/upcomingProviders'
+import type { BinanceData } from '../parse/binance'
+import type { DeutscheBankData } from '../parse/deutscheBank'
 import type { MonthlyPlanData } from '../parse/monthlyPlan'
+import type { MutualFundsData } from '../parse/mutualFunds'
 import { DEFAULT_STATE } from '../state/appState'
 import type { AppState } from '../state/appState'
 import type { MonthData, Tx } from '../types'
@@ -122,11 +126,17 @@ export function Overview({
   selectedMonth,
   plan,
   appState,
+  mutualFunds,
+  deutscheBank,
+  binance,
 }: {
   months: MonthData[]
   selectedMonth: MonthData
   plan?: MonthlyPlanData | null
   appState?: AppState
+  mutualFunds?: MutualFundsData | null
+  deutscheBank?: DeutscheBankData | null
+  binance?: BinanceData | null
 }) {
   const scheme = useColorScheme()
   const palette = getPalette(scheme)
@@ -137,6 +147,23 @@ export function Overview({
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
   const [openIncome, setOpenIncome] = useState<Record<string, boolean>>({})
   const [openUpcoming, setOpenUpcoming] = useState<Record<string, boolean>>({})
+  // Hero-first Overview (owner 2026-07-31): tiles-only by default, the
+  // detail grid behind a toggle. Choice persists like the theme does —
+  // its own localStorage key, not appState (view preference, not data).
+  const [showDetails, setShowDetails] = useState(
+    () => typeof localStorage !== 'undefined' && localStorage.getItem('fp.overviewDetails') === '1',
+  )
+  const toggleDetails = () => {
+    setShowDetails((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('fp.overviewDetails', next ? '1' : '0')
+      } catch {
+        /* private mode — toggle still works for the session */
+      }
+      return next
+    })
+  }
 
   const figures = overviewFigures(selectedMonth)
 
@@ -275,11 +302,18 @@ export function Overview({
   // --- Panel 3c: Credit card bills (human-approved reintegration) --------
   const { rows: cardRows, total: cardTotal } = creditCardBills(selectedMonth.expenses, overrides)
 
+  // --- Hero tile: investments/holdings (owner 2026-07-31: "I need it in
+  // Overview also") — the non-bank net-worth sources. latestMonth is
+  // irrelevant here (it only feeds the bank source, excluded from this
+  // tile), so `undefined` is passed instead of plumbing month pick logic.
+  const holdings = buildNetWorth(undefined, plan ?? null, mutualFunds ?? null, deutscheBank ?? null, binance ?? null, fxRate)
+  const holdingRows = holdings.sources.filter((s) => s.source !== 'bank' && !s.displayOnly && s.valueEUR != null)
+
   return (
-    <div className="overview-screen">
+    <div className={showDetails ? 'overview-screen' : 'overview-screen overview-hero-only'}>
       {/* Hero band: lifetime income + household average (spec §6) */}
       <div className="hero-band">
-        <div className="hero-cell">
+        <div className="hero-cell" data-hero="income">
           <div className="kicker">Total income till now</div>
           <div className="hero-value num">
             <Money amountEUR={lifetime.totalEUR} tabular />
@@ -287,11 +321,16 @@ export function Overview({
           <div className="hero-sub num">
             {inrFmt.format(lifetime.totalEUR * fxRate)} <span className="hero-rate">@ {fxRate} ₹/€</span>
           </div>
-          <div className="hero-note num">
-            Salary {fmtEUR(lifetime.salaryEUR)} · KG {fmtEUR(lifetime.kgEUR)}
+          <div className="hero-note num hero-note-row">
+            <span>Salary</span>
+            <span>{fmtEUR(lifetime.salaryEUR)}</span>
+          </div>
+          <div className="hero-note num hero-note-row">
+            <span>KG</span>
+            <span>{fmtEUR(lifetime.kgEUR)}</span>
           </div>
         </div>
-        <div className="hero-cell">
+        <div className="hero-cell" data-hero="household">
           <div className="kicker">Monthly AVG household</div>
           <div className="hero-value num">
             {lifetime.householdAvgEUR == null ? '—' : <Money amountEUR={lifetime.householdAvgEUR} tabular />}
@@ -299,29 +338,92 @@ export function Overview({
           <div className="hero-note num">
             {fmtEUR(lifetime.householdTotalEUR)} across {lifetime.monthCount} months
           </div>
-          {lifetime.householdLow && lifetime.householdHigh && (
-            <div className="hero-note num">
-              <span style={{ color: 'var(--green)' }}>
-                low {monthLabel(lifetime.householdLow)} {fmtEUR(lifetime.householdLow.amountEUR)}
-              </span>
-              {' · '}
-              <span style={{ color: 'var(--red)' }}>
-                high {monthLabel(lifetime.householdHigh)} {fmtEUR(lifetime.householdHigh.amountEUR)}
-              </span>
+          <div className="hero-note num hero-note-row">
+            <span>{monthLabel(selectedMonth)} so far</span>
+            <span>{fmtEUR(round2(householdOf(selectedMonth)))}</span>
+          </div>
+          {lifetime.householdAvg3EUR != null && (
+            <div className="hero-note num hero-note-row">
+              <span>AVG last 3 mo</span>
+              <span>{fmtEUR(lifetime.householdAvg3EUR)}</span>
             </div>
+          )}
+          {lifetime.householdAvg6EUR != null && (
+            <div className="hero-note num hero-note-row">
+              <span>AVG last 6 mo</span>
+              <span>{fmtEUR(lifetime.householdAvg6EUR)}</span>
+            </div>
+          )}
+          {lifetime.householdLow && lifetime.householdHigh && (
+            <>
+              <div className="hero-note num hero-note-row" style={{ color: 'var(--green)' }}>
+                <span>low {monthLabel(lifetime.householdLow)}</span>
+                <span>{fmtEUR(lifetime.householdLow.amountEUR)}</span>
+              </div>
+              <div className="hero-note num hero-note-row" style={{ color: 'var(--red)' }}>
+                <span>high {monthLabel(lifetime.householdHigh)}</span>
+                <span>{fmtEUR(lifetime.householdHigh.amountEUR)}</span>
+              </div>
+            </>
           )}
         </div>
         {/* Owner 2026-07-27: the old "Credit card bills" panel confused —
             it is simply the card PAYMENTS booked this month. Reframed as a
             small hero tile. */}
-        <div className="hero-cell">
-          <div className="kicker">Card payments this month</div>
+        <div className="hero-cell" data-hero="cardpaid">
+          <div className="kicker">Credit card paid amount</div>
           <div className="hero-value num">
             <Money amountEUR={cardTotal} tabular />
           </div>
-          <div className="hero-note num">
-            {cardRows.length === 0 ? 'no card payments booked yet' : cardRows.map((r) => `${r.label} ${fmtEUR(r.amountEUR)}`).join(' · ')}
+          {cardRows.length === 0 ? (
+            <div className="hero-note num">no card payments booked yet</div>
+          ) : (
+            cardRows.map((r) => (
+              <div key={r.label} className="hero-note num hero-note-row">
+                <span>{r.label}</span>
+                <span>{fmtEUR(r.amountEUR)}</span>
+              </div>
+            ))
+          )}
+        </div>
+        {/* Credit card remaining (owner 2026-07-31): the statement dues
+            still to pay — same cardDues rows the Upcoming panel uses
+            (scratch balances as-is, already net of payments). */}
+        <div className="hero-cell" data-hero="cardleft">
+          <div className="kicker">Credit card remaining</div>
+          <div className="hero-value num">
+            <Money amountEUR={showDues ? duesSum : null} tabular />
           </div>
+          {!showDues ? (
+            <div className="hero-note num">no scratch balances this month</div>
+          ) : (
+            dues.map((d) => (
+              <div key={d.key} className="hero-note num hero-note-row">
+                <span>{d.label}</span>
+                <span>{d.due == null ? '—' : fmtEUR(d.due)}</span>
+              </div>
+            ))
+          )}
+        </div>
+        {/* Investments (owner 2026-07-31): the COUNTED non-bank net-worth
+            sources — DB paid G91, India MF row-38 total, Sandra SBI,
+            Shinto SBI (C61). Binance/Upstocks are display-only on the Net
+            worth tab and never appear or count here. */}
+        <div className="hero-cell" data-hero="invest">
+          <div className="kicker">Investments</div>
+          <div className="hero-value num">
+            <Money amountEUR={holdingRows.length ? holdings.nonBankTotalEUR : null} tabular />
+          </div>
+          {holdingRows.length === 0 ? (
+            <div className="hero-note num">no investment sources loaded</div>
+          ) : (
+            holdingRows.map((s) => (
+              <div key={s.source} className="hero-note num hero-note-row">
+                <span>{s.label}</span>
+                <span>{fmtEUR(s.valueEUR ?? 0)}</span>
+              </div>
+            ))
+          )}
         </div>
         {/* Debt / Credit (owner 2026-07-27, hoisted to the hero band same
             day): net position after savings and expected income cover the
@@ -331,12 +433,28 @@ export function Overview({
           <div className="hero-value num" style={{ color: netDebt > 0 ? 'var(--red)' : 'var(--green)' }}>
             <Money amountEUR={Math.abs(netDebt)} tabular />
           </div>
-          <div className="hero-note num">
-            {fmtEUR(toPayTotal)} upcoming − {fmtEUR(bankTotal)} savings − {fmtEUR(expectedTotal)} expected
+          <div className="hero-note num hero-note-row">
+            <span>upcoming</span>
+            <span>{fmtEUR(toPayTotal)}</span>
+          </div>
+          <div className="hero-note num hero-note-row">
+            <span>savings</span>
+            <span>− {fmtEUR(bankTotal)}</span>
+          </div>
+          <div className="hero-note num hero-note-row">
+            <span>expected</span>
+            <span>− {fmtEUR(expectedTotal)}</span>
           </div>
         </div>
       </div>
 
+      <div className="overview-toggle-row">
+        <button type="button" className="overview-toggle" onClick={toggleDetails}>
+          {showDetails ? 'Hide details ▲' : 'Show details ▼'}
+        </button>
+      </div>
+
+      {showDetails && (
       <div className="overview-grid">
       {/* Column 1 (LHS, owner request spec §6): Income sources + Savings
           progress — this col-stack rendered after the category panel before
@@ -701,6 +819,7 @@ export function Overview({
 
       </div>
       </div>
+      )}
     </div>
   )
 }

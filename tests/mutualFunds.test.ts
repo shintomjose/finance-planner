@@ -166,6 +166,26 @@ describe('summary (M39:N42)', () => {
   })
 })
 
+describe('fund totals off row 38 (owner 2026-07-31: C/F/I/K/O/S/U/W, SOLD funds excluded)', () => {
+  it('captures 8 per-fund invested totals with row-1 headings; label-bearing first cells fall through to the figure one right', () => {
+    expect(result.fundTotals).toEqual([
+      { fund: 'Quant Small Cap Fund', investedINR: 16000 },
+      { fund: 'JM Flexicap Fund', investedINR: 39000 },
+      { fund: 'PGIM India Midcap Opportunities Fund', investedINR: 18000 },
+      { fund: '360 ONE Focused Equity Fund', investedINR: 55100 },
+      { fund: 'Aditya Birla Sun Life Flexi Cap Fund', investedINR: 118500 },
+      { fund: 'HDFC Small Cap Fund', investedINR: 18100 },
+      { fund: 'Motilal Oswal Midcap Fund', investedINR: 13100 },
+      { fund: 'Invesco India Midcap Fund', investedINR: 248000 },
+    ])
+  })
+
+  it('sums the known totals; SOLD funds contribute nothing', () => {
+    expect(result.investedTotalINR).toBe(525800)
+    expect(result.fundTotals.some((f) => /SOLD/.test(f.fund))).toBe(false)
+  })
+})
+
 describe('overall issue set', () => {
   it('contains exactly the 3 planted issue-worthy cells — no stray drops', () => {
     const kinds = result.issues.map((i) => `${i.kind}@${i.cell}`).sort()

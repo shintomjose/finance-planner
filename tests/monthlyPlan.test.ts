@@ -101,6 +101,37 @@ describe('SBI Life schedule (A29:D63, real layout: A=index ignored, B=date, C=am
   })
 })
 
+describe('Shinto SBI Life total (owner correction 2026-07-31 #3: C61 live; fixture footer at row 62 — G8 never read, it double-counts Sandra)', () => {
+  it('picks the labelled Total footer under the schedule', () => {
+    expect(result.shintoSbiLifeINR).toBe(155000)
+  })
+
+  it('missing footer → null, no issue', () => {
+    const bare = parseMonthlyPlan({ values: [['x']] })
+    expect(bare.shintoSbiLifeINR).toBeNull()
+  })
+})
+
+describe('SANDRA SBI LIFE block (owner 2026-07-31, located by header label — fixture plants it at L30:M34)', () => {
+  it('parses the dated ₹ rows below the header, skipping the blank spacer row', () => {
+    expect(result.sandraSbiLife.rows).toEqual([
+      { date: '2024-08-18', amountINR: 50000 },
+      { date: '2025-07-30', amountINR: 70000 },
+    ])
+  })
+
+  it('the TOTAL row ends the block and supplies totalINR (never parsed as a payment row)', () => {
+    expect(result.sandraSbiLife.totalINR).toBe(120000)
+    expect(result.sandraSbiLife.rows).toHaveLength(2)
+  })
+
+  it('a grid without the header yields an empty block, no issue', () => {
+    const bare = parseMonthlyPlan({ values: [['x']] })
+    expect(bare.sandraSbiLife).toEqual({ rows: [], totalINR: null })
+    expect(bare.sandraSbiLife.rows).toHaveLength(0)
+  })
+})
+
 describe('badminton gear logs (F30:G64 EUR, real layout: F=label, G=amountEUR, no dates)', () => {
   const eur = result.logs.filter((l) => l.log === 'gear' && 'amountEUR' in l.fields)
 

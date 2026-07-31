@@ -106,6 +106,52 @@ describe('totals (given/repaid recomputed; remaining sheet-trusted — live-run 
   })
 })
 
+describe('inline repayments-total footer (owner correction 2026-07-31: the live total sits INSIDE F133:G189)', () => {
+  // Minimal synthetic grid builder: A1-based sparse 2D array, F=index 5, G=index 6.
+  function grid(rows: Record<number, [string | null, number | string | null]>): SpecialGrids {
+    const values: (string | number | null)[][] = []
+    for (const [rowStr, [f, g]] of Object.entries(rows)) {
+      const r = Number(rowStr) - 1
+      values[r] = []
+      values[r][5] = f
+      values[r][6] = g
+    }
+    return { values } as SpecialGrids
+  }
+
+  it('a "Total"-labelled row is excluded from the ledger and used as the sheet total (no drift when it matches)', () => {
+    const { ledger, issues } = parseSachin(grid({ 133: ['A', 300], 134: ['B', 340], 140: ['Total', 640] }))
+    expect(ledger.repayments.map((r) => r.row)).toEqual([133, 134])
+    expect(ledger.totals.repaid).toBe(640)
+    expect(issues.filter((i) => i.kind === 'sum-drift')).toHaveLength(0)
+  })
+
+  it('a "Total"-labelled row that does NOT match the recomputed sum emits sum-drift at ITS cell, not G190', () => {
+    const { issues } = parseSachin(grid({ 133: ['A', 300], 134: ['B', 340], 140: ['Total Repayment', 700] }))
+    expect(issues).toContainEqual(expect.objectContaining({ cell: 'G140', kind: 'sum-drift' }))
+  })
+
+  it('an unlabelled LAST row equal to the sum of the rest is the footer — excluded, no double count', () => {
+    // The live bug: blank F on the footer row rendered as "Repayment 29.650,00 €".
+    const { ledger, issues } = parseSachin(grid({ 133: ['A', 300], 134: ['B', 340], 150: [null, 640] }))
+    expect(ledger.repayments.map((r) => r.row)).toEqual([133, 134])
+    expect(ledger.totals.repaid).toBe(640)
+    expect(issues.filter((i) => i.kind === 'sum-drift')).toHaveLength(0)
+  })
+
+  it('a last row that is a REAL repayment (not equal to the rest-sum) stays in the ledger', () => {
+    const { ledger } = parseSachin(grid({ 133: ['A', 300], 134: ['B', 340], 150: [null, 500] }))
+    expect(ledger.repayments).toHaveLength(3)
+    expect(ledger.totals.repaid).toBe(1140)
+  })
+
+  it('a lone repayment row never matches itself as a footer', () => {
+    const { ledger } = parseSachin(grid({ 133: [null, 250] }))
+    expect(ledger.repayments).toHaveLength(1)
+    expect(ledger.totals.repaid).toBe(250)
+  })
+})
+
 describe('ledger name', () => {
   it('is Sachin', () => {
     expect(ledger.name).toBe('Sachin')

@@ -199,7 +199,7 @@ export function KpiCardView({ card }: { card: KpiCard }) {
   const valueTone: 'bad' | 'neutral' = value != null && value < 0 ? 'bad' : 'neutral'
 
   return (
-    <div className="kpi-card">
+    <div className="kpi-card" data-kpi={card.id}>
       <div className="kicker">{label}</div>
       <div className={`kpi-value num${valueTone === 'bad' ? ' tone-bad' : ''}`}>
         {value == null ? '—' : <Money amountEUR={value} tabular />}

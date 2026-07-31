@@ -5,7 +5,9 @@
       (function () {
         var m = null;
         try { m = localStorage.getItem('fp.theme'); } catch (e) { /* private mode */ }
-        var dark = m === 'dark' || (m !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        // Default mode is LIGHT (mirrors lib/theme.ts loadThemeMode); OS
+        // preference only applies when 'system' was explicitly chosen.
+        var dark = m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       })();
     </script>

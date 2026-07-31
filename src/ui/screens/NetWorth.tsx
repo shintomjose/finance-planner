@@ -44,7 +44,7 @@ const fmtPct = (v: number | null) => (v == null ? '—' : `${v > 0 ? '+' : ''}${
 // binance) is already a straight EUR read, so showing a re-derived ₹ number
 // for those would just be noise (dataviz: never show a secondary channel
 // the reader can't independently ground).
-const INR_SOURCES = new Set<NetWorthSource['source']>(['mf', 'upstocks'])
+const INR_SOURCES = new Set<NetWorthSource['source']>(['mf', 'upstocks', 'sbi-sandra', 'sbi'])
 
 const DEFAULT_PROJECTION_YEARS = 10
 
@@ -64,6 +64,8 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
     mf: mutualFunds != null,
     binance: binance != null,
     upstocks: plan != null,
+    'sbi-sandra': plan != null,
+    sbi: plan != null,
   }
 
   const nothingConnected = !connected.bank && !connected.db && !connected.mf && !connected.binance && !connected.upstocks
@@ -78,7 +80,7 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
   }
 
   const compositionSlices = view.sources
-    .filter((s) => s.valueEUR != null && s.valueEUR !== 0)
+    .filter((s) => !s.displayOnly && s.valueEUR != null && s.valueEUR !== 0)
     .map((s) => ({ key: s.source, label: s.label, value: s.valueEUR as number }))
 
   const netPl = view.investedTotalEUR !== 0 ? round1((view.totalEUR - view.investedTotalEUR) / view.investedTotalEUR * 100) : null
@@ -129,7 +131,10 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
           {view.sources.map((s) =>
             connected[s.source] ? (
               <div className="networth-row" key={s.source}>
-                <span className="networth-row-label">{s.label}</span>
+                <span className="networth-row-label">
+                  {s.label}
+                  {s.displayOnly && <span className="networth-row-disconnected"> (not counted)</span>}
+                </span>
                 <div className="networth-row-figures">
                   <Money amountEUR={s.valueEUR} fxRate={INR_SOURCES.has(s.source) ? fxRate : undefined} tabular />
                   {s.investedEUR != null && (
@@ -152,6 +157,75 @@ export function NetWorth({ months, plan, mutualFunds, deutscheBank, binance, fxR
           )}
         </div>
       </Section>
+
+      {/* India Mutual Funds breakdown (owner 2026-07-31): the per-fund
+          row-38 invested totals behind the sources row above — headings
+          from the sheet's row 1, primary figure in ₹. */}
+      {mutualFunds && mutualFunds.fundTotals.length > 0 && (
+        <Section title="India Mutual Funds — invested per fund (₹)">
+          <div className="panel2">
+            <div className="panel2-head">
+              <span>Fund totals</span>
+              <span className="panel2-meta">{mutualFunds.fundTotals.length} funds</span>
+            </div>
+            {mutualFunds.fundTotals.map((f) => (
+              <div className="dg-row" style={{ gridTemplateColumns: '1fr 190px' }} key={f.fund}>
+                <span>{f.fund}</span>
+                <span className="right">
+                  <Money amountINR={f.investedINR} mode="INR" fxRate={fxRate} tabular />
+                </span>
+              </div>
+            ))}
+            <div className="dg-foot" style={{ gridTemplateColumns: '1fr 190px' }}>
+              <span>Total</span>
+              <span className="right">
+                <Money amountINR={mutualFunds.investedTotalINR} mode="INR" fxRate={fxRate} tabular />
+              </span>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* SBI Life (owner 2026-07-31): the SANDRA SBI LIFE block's dated
+          contributions + its TOTAL, and Shinto's own C61 total. G8 (family
+          combined) is never shown — it duplicates Sandra + Shinto. */}
+      {plan && (plan.sandraSbiLife.rows.length > 0 || plan.shintoSbiLifeINR != null) && (
+        <Section title="SBI Life (₹)">
+          <div className="panel2">
+            <div className="panel2-head">
+              <span>Sandra SBI Life</span>
+              <span className="panel2-meta">{plan.sandraSbiLife.rows.length} payments</span>
+            </div>
+            {plan.sandraSbiLife.rows.map((r, idx) => (
+              <div className="dg-row" style={{ gridTemplateColumns: '1fr 190px' }} key={`${r.date}-${idx}`}>
+                <span className="num">{r.date ?? '–'}</span>
+                <span className="right">
+                  <Money amountINR={r.amountINR} mode="INR" fxRate={fxRate} tabular />
+                </span>
+              </div>
+            ))}
+            {/* One total per person, clearly named (owner: no duplicate
+                "Total" rows): Sandra's block TOTAL already IS the sum of
+                her payments above; Shinto's C61 is his own policy total. */}
+            {plan.sandraSbiLife.totalINR != null && (
+              <div className="dg-foot" style={{ gridTemplateColumns: '1fr 190px' }}>
+                <span>Sandra total</span>
+                <span className="right">
+                  <Money amountINR={plan.sandraSbiLife.totalINR} mode="INR" fxRate={fxRate} tabular />
+                </span>
+              </div>
+            )}
+            {plan.shintoSbiLifeINR != null && (
+              <div className="dg-foot" style={{ gridTemplateColumns: '1fr 190px' }}>
+                <span>Shinto SBI Life</span>
+                <span className="right">
+                  <Money amountINR={plan.shintoSbiLifeINR} mode="INR" fxRate={fxRate} tabular />
+                </span>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
 
       <Section
         title="Projection"

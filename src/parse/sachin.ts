@@ -105,8 +105,22 @@ function parseGiven(values: (string | number | null)[][], issues: ParserIssue[])
  * bad/error cell, which still counts as "present" — same
  * "unparseable-but-present is never silently dropped" contract as every
  * other parser). `label` falls back to 'Repayment' only if F is itself
- * blank on an amount-bearing row. */
-function parseRepayments(values: (string | number | null)[][], issues: ParserIssue[]): PersonLedger['repayments'] {
+ * blank on an amount-bearing row.
+ *
+ * Inline footer total (owner correction 2026-07-31): the sheet's own
+ * repayments-total cell lives INSIDE this range on the live sheet (the
+ * G190 footer position was an unverified inference) — it was being parsed
+ * as a 29.650 € "repayment" row and double-counted. A parsed row is
+ * reclassified as that footer when its F label contains "total"
+ * (case-insensitive), or — labels can be blank on the live footer — when
+ * it is the LAST amount-bearing row and its amount equals the sum of every
+ * other row (±0.01, ≥2 rows so a lone entry can never match itself against
+ * an empty rest). The footer is excluded from the ledger and returned
+ * separately for the drift check. */
+function parseRepayments(
+  values: (string | number | null)[][],
+  issues: ParserIssue[],
+): { rows: PersonLedger['repayments']; inlineTotal: { row: number; amountEUR: number | null } | null } {
   const out: PersonLedger['repayments'] = []
   for (let row = REPAY_FIRST_ROW; row <= REPAY_LAST_ROW; row++) {
     const amountRaw = cellAt(values, `G${row}`)
@@ -116,7 +130,23 @@ function parseRepayments(values: (string | number | null)[][], issues: ParserIss
     const amountEUR = readNumber(values, `G${row}`, issues)
     out.push({ date: null, label, amountEUR, row })
   }
-  return out
+
+  const totalIdx = out.findIndex((r) => /total/i.test(r.label))
+  if (totalIdx >= 0) {
+    const [footer] = out.splice(totalIdx, 1)
+    return { rows: out, inlineTotal: { row: footer.row, amountEUR: footer.amountEUR } }
+  }
+
+  const last = out[out.length - 1]
+  if (out.length >= 2 && last.amountEUR != null) {
+    const restSum = out.slice(0, -1).reduce((s, r) => s + (r.amountEUR ?? 0), 0)
+    if (Math.abs(last.amountEUR - restSum) <= 0.01) {
+      out.pop()
+      return { rows: out, inlineTotal: { row: last.row, amountEUR: last.amountEUR } }
+    }
+  }
+
+  return { rows: out, inlineTotal: null }
 }
 
 /** EMI blocks: scan the whole H column for one of the 4 known header
@@ -161,7 +191,7 @@ export function parseSachin(grids: SpecialGrids): SachinData {
   const issues: ParserIssue[] = []
 
   const entries = parseGiven(values, issues)
-  const repayments = parseRepayments(values, issues)
+  const { rows: repayments, inlineTotal } = parseRepayments(values, issues)
   const emis = parseEmis(values, issues)
 
   const given = entries.reduce((sum, e) => sum + (e.amountEUR ?? 0), 0)
@@ -175,11 +205,15 @@ export function parseSachin(grids: SpecialGrids): SachinData {
     })
   }
 
-  const sheetRepaidTotal = readNumber(values, `G${REPAY_TOTAL_ROW}`, issues)
+  // The sheet's repayments-total cell: the inline footer inside the block
+  // when detected (owner correction 2026-07-31 — it was double-counted as
+  // a row), else the G190 position inferred from the data+footer pattern.
+  const repaidTotalCell = inlineTotal ? `G${inlineTotal.row}` : `G${REPAY_TOTAL_ROW}`
+  const sheetRepaidTotal = inlineTotal ? inlineTotal.amountEUR : readNumber(values, `G${REPAY_TOTAL_ROW}`, issues)
   if (sheetRepaidTotal !== null && Math.abs(sheetRepaidTotal - repaid) > 0.01) {
     issues.push({
-      sheet: SHEET, cell: `G${REPAY_TOTAL_ROW}`, kind: 'sum-drift',
-      detail: `repayments total: sheet ${sheetRepaidTotal} at G${REPAY_TOTAL_ROW} vs recomputed ${repaid} (diff ${(sheetRepaidTotal - repaid).toFixed(2)})`,
+      sheet: SHEET, cell: repaidTotalCell, kind: 'sum-drift',
+      detail: `repayments total: sheet ${sheetRepaidTotal} at ${repaidTotalCell} vs recomputed ${repaid} (diff ${(sheetRepaidTotal - repaid).toFixed(2)})`,
     })
   }
 

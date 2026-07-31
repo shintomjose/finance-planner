@@ -9,8 +9,8 @@ function memStorage() {
 describe('theme mode persistence', () => {
   beforeEach(() => _setThemeStorage(memStorage()))
 
-  it('defaults to system when nothing stored', () => {
-    expect(loadThemeMode()).toBe('system')
+  it('defaults to light when nothing stored', () => {
+    expect(loadThemeMode()).toBe('light')
   })
 
   it('round-trips an explicit mode', () => {
@@ -20,16 +20,16 @@ describe('theme mode persistence', () => {
     expect(loadThemeMode()).toBe('light')
   })
 
-  it('treats garbage in storage as system', () => {
+  it('treats garbage in storage as light', () => {
     const s = memStorage()
     s.setItem('fp.theme', 'neon')
     _setThemeStorage(s)
-    expect(loadThemeMode()).toBe('system')
+    expect(loadThemeMode()).toBe('light')
   })
 
   it('survives missing storage (node env)', () => {
     _setThemeStorage(undefined)
-    expect(loadThemeMode()).toBe('system')
+    expect(loadThemeMode()).toBe('light')
     expect(() => saveThemeMode('dark')).not.toThrow()
   })
 })

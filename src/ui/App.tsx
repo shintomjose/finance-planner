@@ -18,7 +18,6 @@ import { useState } from 'react'
 import { useAppData } from '../data/useAppData'
 import { pickDisplayedMonth } from '../lib/period'
 import { bannerFor } from '../lib/banner'
-import { buildNetWorth } from '../lib/networth'
 import { Layout, SCREEN_REGISTRY } from './Layout'
 import type { ScreenId } from './Layout'
 import { SignIn } from './SignIn'
@@ -73,13 +72,10 @@ export default function App() {
   //  - target: locked rule (same expression Overview.tsx's savings-progress
   //    panel uses) — a real, positive plan surplus, else no target at all
   //    (never a hardcoded fallback figure).
-  //  - investedEUR: buildNetWorth (src/lib/networth.ts) is a pure aggregate
-  //    of the invested basis across every connected source (DB/MF/Binance/
-  //    Upstocks) already built from data this component has in hand — reuse
-  //    it rather than inventing new investment math. `investedTotalEUR` is
-  //    a plain sum, so this stays "cheap and correct" per the fix brief.
+  // (Net Worth KPI card removed 2026-07-31 — the Overview "Investments"
+  // hero tile and the Net worth screen carry those figures now, so no
+  // investedEUR option is computed here anymore.)
   const target = plan?.budgetTotals.surplus != null && plan.budgetTotals.surplus > 0 ? plan.budgetTotals.surplus : null
-  const investedEUR = buildNetWorth(latestMonth, plan, mutualFunds, deutscheBank, binance, appState.fxRate).investedTotalEUR
 
   return (
     <Layout
@@ -90,7 +86,7 @@ export default function App() {
       selectedMonth={selectedMonth}
       onSelectMonth={setSelectedTab}
       onRefresh={refresh}
-      kpiOpts={{ target, investedEUR }}
+      kpiOpts={{ target }}
       banner={bannerForDisplayedTab ? <p className="banner">Showing cached data</p> : undefined}
       chip={
         otherFailedTabCount > 0 ? (

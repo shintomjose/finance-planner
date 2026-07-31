@@ -16,7 +16,9 @@ export function _setThemeStorage(s: StorageLike | undefined): void {
 
 export function loadThemeMode(): ThemeMode {
   const raw = storage?.getItem(KEY)
-  return (MODES as readonly string[]).includes(raw ?? '') ? (raw as ThemeMode) : 'system'
+  // Owner preference (2026-07-31): light is the default until a mode is
+  // explicitly chosen — 'system' would flip dark on OS dark mode.
+  return (MODES as readonly string[]).includes(raw ?? '') ? (raw as ThemeMode) : 'light'
 }
 
 export function saveThemeMode(mode: ThemeMode): void {

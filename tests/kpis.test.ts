@@ -33,16 +33,17 @@ describe('buildKpis', () => {
     expect(k.find((c) => c.id === 'saved')!.value).toBe(600)
   })
 
-  it('upcoming sums bills only — food-home tracker excluded', () => {
+  it('upcoming card removed (owner 2026-07-31); monthMetrics still computes the figure for networth/Trends', () => {
     const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
-    expect(k.find((c) => c.id === 'upcoming')!.value).toBe(80)
+    expect(k.some((c) => c.id === ('upcoming' as string))).toBe(false)
+    expect(monthMetrics(month('JUN_25', 2025, 6)).upcoming).toBe(80)
   })
 
   it('cash uses bank sum fallback; savings card removed (2026-07-27), pot still feeds networth', () => {
     const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
     expect(k.find((c) => c.id === 'cash')!.value).toBe(230)
     expect(k.some((c) => c.id === ('savings' as string))).toBe(false)
-    expect(k).toHaveLength(6)
+    expect(k).toHaveLength(4)
   })
 
   it('owner labels (2026-07-27): saved and cash cards renamed', () => {
@@ -64,7 +65,6 @@ describe('buildKpis', () => {
     const bare = month('JAN_22', 2022, 1, { banks: [], upcoming: [], bankTotal: null })
     const k = buildKpis([bare], 'JAN_22')
     expect(k.find((c) => c.id === 'cash')!.value).toBeNull()
-    expect(k.find((c) => c.id === 'networth')!.value).toBeNull()
   })
 
   it('cash series preserves a null gap for a month with no bank data (not coerced to 0)', () => {
@@ -88,12 +88,9 @@ describe('buildKpis', () => {
     expect(monthMetrics(month('JUN_25', 2025, 6)).upcoming).toBe(80)
   })
 
-  it('networth includes invested when provided', () => {
-    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25', { investedEUR: 1000 })
-    // cash 230 + savings 30 + 1000 − upcoming 80
-    expect(k.find((c) => c.id === 'networth')!.value).toBe(1180)
-    // de-DE thousands/decimal convention (matches Money's own locale), not
-    // en-US — see kpis.ts's fmtNum comment.
-    expect(k.find((c) => c.id === 'networth')!.note).toContain('1.000,00')
+  it('networth card removed (owner 2026-07-31) — 4 cards, no networth id', () => {
+    const k = buildKpis([month('JUN_25', 2025, 6)], 'JUN_25')
+    expect(k).toHaveLength(4)
+    expect(k.some((c) => c.id === ('networth' as string))).toBe(false)
   })
 })

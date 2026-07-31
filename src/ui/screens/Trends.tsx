@@ -150,7 +150,7 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
           <span>Net worth &amp; cash — 12 months</span>
           <span className="panel2-meta">{windowMonths.length} months</span>
         </div>
-        <div style={{ display: 'flex', gap: 14, padding: '10px 14px 0', fontSize: 12 }}>
+        <div style={{ display: 'flex', gap: 14, padding: '10px 14px 0', fontSize: 13 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span className="dot" style={{ background: palette.categorical[0] }} />
             Net worth
@@ -176,13 +176,13 @@ export function Trends({ months, state, selectedMonth, onSelectMonth }: TrendsSc
             <XAxis
               dataKey="tab"
               stroke={palette.axis}
-              tick={{ fill: palette.textMuted, fontSize: 12 }}
+              tick={{ fill: palette.textMuted, fontSize: 13 }}
               tickLine={false}
               axisLine={{ stroke: palette.axis }}
             />
             <YAxis
               stroke={palette.axis}
-              tick={{ fill: palette.textMuted, fontSize: 12 }}
+              tick={{ fill: palette.textMuted, fontSize: 13 }}
               tickLine={false}
               axisLine={false}
               width={56}

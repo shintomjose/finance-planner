@@ -9,9 +9,11 @@ import { overviewFigures } from './overviewFigures'
 import { partitionUpcoming } from './foodHome'
 import { round2, sortByPeriod } from './mathUtils'
 
-// 'savings' card removed 2026-07-27 (owner request) — monthMetrics still
-// computes the savings figure because the networth card's math needs it.
-export type KpiId = 'income' | 'expenses' | 'saved' | 'cash' | 'upcoming' | 'networth'
+// 'savings' card removed 2026-07-27; 'upcoming' and 'networth' cards
+// removed 2026-07-31 (owner: confusing — the Overview "Investments" hero
+// tile and the Net worth screen carry those figures now). monthMetrics
+// still computes savings/upcoming for Trends and any future consumer.
+export type KpiId = 'income' | 'expenses' | 'saved' | 'cash'
 
 export interface KpiCard {
   id: KpiId
@@ -25,7 +27,6 @@ export interface KpiCard {
 
 export interface KpiOptions {
   target?: number | null
-  investedEUR?: number | null
 }
 
 export interface MetricParts {
@@ -125,20 +126,6 @@ const METRICS: MetricSpec[] = [
     goodUp: true,
     value: (p) => p.cash,
     note: (p) => `across ${p.bankCount} accounts`,
-  },
-  {
-    id: 'upcoming',
-    label: 'Upcoming Bills',
-    goodUp: false,
-    value: (p) => p.upcoming,
-    note: (p) => `${p.billCount} bills`,
-  },
-  {
-    id: 'networth',
-    label: 'Net Worth',
-    goodUp: true,
-    value: (p, opts) => (p.cash == null ? null : round2(p.cash + (p.savings ?? 0) + (opts.investedEUR ?? 0) - p.upcoming)),
-    note: (_p, opts) => (opts.investedEUR != null ? `incl. €${fmtNum(opts.investedEUR)} invested` : 'excl. investments'),
   },
 ]
 
