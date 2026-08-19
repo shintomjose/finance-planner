@@ -110,7 +110,7 @@ function parseGiven(values: (string | number | null)[][], issues: ParserIssue[])
  * Inline footer total (owner correction 2026-07-31): the sheet's own
  * repayments-total cell lives INSIDE this range on the live sheet (the
  * G190 footer position was an unverified inference) — it was being parsed
- * as a REDACTED € "repayment" row and double-counted. A parsed row is
+ * as one more "repayment" row and double-counted. A parsed row is
  * reclassified as that footer when its F label contains "total"
  * (case-insensitive), or — labels can be blank on the live footer — when
  * it is the LAST amount-bearing row and its amount equals the sum of every

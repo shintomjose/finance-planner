@@ -3,14 +3,15 @@
 // (Sachin, Cris, ...) — as curated by the owner in the K/L forecast block
 // of each month tab (owner picked this block explicitly as the source).
 //
-// Live JUL_26 shape of that block (labels, not fixed rows):
-//   K15 BALANCE REDACTED        <- start anchor candidates
-//   K16 MINUS EXP -REDACTED    <-
+// Shape of that block (labels, not fixed rows; SYNTHETIC example values —
+// no real sheet figures belong in this public repo):
+//   K15 BALANCE 1650.00        <- start anchor candidates
+//   K16 MINUS EXP -2500.00     <-
 //   K17 KG+EG (blank)
 //   K18 SACHIN 900.60          <- the income rows live HERE
 //   K19 CRIS (blank)
 //   K21 Salary (blank)
-//   K22 TOTAL -REDACTED        <- end anchor
+//   K22 TOTAL -850.00          <- end anchor
 //
 // The income rows are exactly the labeled K/L rows BETWEEN the last of
 // BALANCE/MINUS EXP and the first TOTAL after it. Rows with a blank L cell

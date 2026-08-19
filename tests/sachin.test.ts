@@ -132,7 +132,8 @@ describe('inline repayments-total footer (owner correction 2026-07-31: the live 
   })
 
   it('an unlabelled LAST row equal to the sum of the rest is the footer — excluded, no double count', () => {
-    // The live bug: blank F on the footer row rendered as "Repayment REDACTED,00 €".
+    // The live bug shape: blank F on the footer row rendered the sheet's
+    // own total as one more "Repayment" ledger row.
     const { ledger, issues } = parseSachin(grid({ 133: ['A', 300], 134: ['B', 340], 150: [null, 640] }))
     expect(ledger.repayments.map((r) => r.row)).toEqual([133, 134])
     expect(ledger.totals.repaid).toBe(640)

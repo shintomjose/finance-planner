@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 
 .superpowers/
+
+# Contain REAL financial data — never tracked in this public repo
+# (golden rule: synthetic fixtures only). Kept locally as references.
+SESSION_HANDOVER.md
+docs/overview.html
+docs/finance-planner.html
+.claude/skills/finance-planner/workbook-map.md
+docs/superpowers/specs/2026-07-24-sambathikam-planner-design.md
+docs/superpowers/specs/2026-07-27-overview-v2-badminton-design.md
