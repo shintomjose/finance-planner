@@ -297,7 +297,15 @@ export function Overview({
   const netDebt = round2(toPayTotal - bankTotal - expectedTotal)
 
   // --- Hero band: lifetime totals (spec 2026-07-27 §4/§6) -----------------
-  const lifetime = lifetimeTotals(months)
+  // "Till now" = every month up to and including the SELECTED month, not
+  // every tab in the workbook (owner correction 2026-09-02: was silently
+  // including months after the one currently viewed).
+  const monthsTillSelected = months.filter((m) => {
+    const key = m.period.year * 12 + m.period.month
+    const selKey = selectedMonth.period.year * 12 + selectedMonth.period.month
+    return key <= selKey
+  })
+  const lifetime = lifetimeTotals(monthsTillSelected)
 
   // --- Panel 3c: Credit card bills (human-approved reintegration) --------
   const { rows: cardRows, total: cardTotal } = creditCardBills(selectedMonth.expenses, overrides)
@@ -326,8 +334,8 @@ export function Overview({
             <span>{fmtEUR(lifetime.salaryEUR)}</span>
           </div>
           <div className="hero-note num hero-note-row">
-            <span>KG</span>
-            <span>{fmtEUR(lifetime.kgEUR)}</span>
+            <span>KG/EG/ITR/EnBW</span>
+            <span>{fmtEUR(lifetime.otherIncomeEUR)}</span>
           </div>
         </div>
         <div className="hero-cell" data-hero="household">

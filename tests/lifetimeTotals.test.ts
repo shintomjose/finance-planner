@@ -25,9 +25,25 @@ describe('lifetimeTotals', () => {
     ]
     const t = lifetimeTotals(months)
     expect(t.salaryEUR).toBe(2100)
-    expect(t.kgEUR).toBe(505)
+    expect(t.otherIncomeEUR).toBe(505)
     expect(t.totalEUR).toBe(2605)
     expect(t.monthCount).toBe(2)
+  })
+
+  it('also counts EG/ElternGeld, ITR/Tax Return, and EnBW income rows', () => {
+    const months = [
+      month('A', [
+        tx('Salary', 1000, 'income'),
+        tx('EG', 300, 'income'),
+        tx('ElternGeld', 300, 'income'),
+        tx('ITR', 400, 'income'),
+        tx('Tax Return', 400, 'income'),
+        tx('EnBW', 50, 'income'),
+      ]),
+    ]
+    const t = lifetimeTotals(months)
+    expect(t.otherIncomeEUR).toBe(1450)
+    expect(t.totalEUR).toBe(2450)
   })
 
   it('carryover never counts (it is not in income[] at all — parser guarantee)', () => {

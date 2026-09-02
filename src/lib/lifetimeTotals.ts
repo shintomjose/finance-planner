@@ -14,8 +14,9 @@ export interface HouseholdExtreme {
 
 export interface LifetimeTotals {
   salaryEUR: number
-  kgEUR: number
-  /** salaryEUR + kgEUR — the owner's "Total income till now". */
+  /** KG/KinderGeld + EG/ElternGeld + ITR/Tax Return + EnBW (refund) income rows. */
+  otherIncomeEUR: number
+  /** salaryEUR + otherIncomeEUR — the owner's "Total income till now". */
   totalEUR: number
   monthCount: number
   /** Σ per-month household. Per month: the sheet's own summary Household
@@ -42,7 +43,10 @@ export interface LifetimeTotals {
   householdHigh: HouseholdExtreme | null
 }
 
-const KG_LABELS = new Set(['kg', 'kindergeld'])
+// KG/EG abbreviations, their full German forms, ITR (India tax return —
+// owner sometimes labels it "Tax Return"), and EnBW (electricity refund rows
+// that land in income[], distinct from the EnBW *bill* in expenses).
+const OTHER_INCOME_LABELS = new Set(['kg', 'kindergeld', 'eg', 'elterngeld', 'itr', 'tax return', 'enbw'])
 
 /** One month's household figure: the sheet's own summary Household cell
  * when present, else the sum of household-tagged expense rows, else 0.
@@ -66,14 +70,14 @@ function trailingAvg(sorted: MonthData[], n: number): number | null {
 
 export function lifetimeTotals(months: MonthData[], now: Date = new Date()): LifetimeTotals {
   let salaryEUR = 0
-  let kgEUR = 0
+  let otherIncomeEUR = 0
   let householdTotalEUR = 0
   let householdLow: HouseholdExtreme | null = null
   let householdHigh: HouseholdExtreme | null = null
   for (const m of months) {
     for (const tx of m.income) {
       if (tx.normLabel === 'salary') salaryEUR += tx.amountEUR ?? 0
-      else if (KG_LABELS.has(tx.normLabel)) kgEUR += tx.amountEUR ?? 0
+      else if (OTHER_INCOME_LABELS.has(tx.normLabel)) otherIncomeEUR += tx.amountEUR ?? 0
     }
     const h = householdOf(m)
     householdTotalEUR += h
@@ -83,7 +87,7 @@ export function lifetimeTotals(months: MonthData[], now: Date = new Date()): Lif
     }
   }
   salaryEUR = round2(salaryEUR)
-  kgEUR = round2(kgEUR)
+  otherIncomeEUR = round2(otherIncomeEUR)
   householdTotalEUR = round2(householdTotalEUR)
   const monthCount = months.length
   const nowKey = now.getFullYear() * 12 + now.getMonth() + 1
@@ -92,8 +96,8 @@ export function lifetimeTotals(months: MonthData[], now: Date = new Date()): Lif
     .sort((a, b) => a.period.year - b.period.year || a.period.month - b.period.month)
   return {
     salaryEUR,
-    kgEUR,
-    totalEUR: round2(salaryEUR + kgEUR),
+    otherIncomeEUR,
+    totalEUR: round2(salaryEUR + otherIncomeEUR),
     monthCount,
     householdTotalEUR,
     householdAvgEUR: monthCount > 0 ? round2(householdTotalEUR / monthCount) : null,
