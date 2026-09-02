@@ -330,6 +330,10 @@ export function Overview({
             {inrFmt.format(lifetime.totalEUR * fxRate)} <span className="hero-rate">@ {fxRate} ₹/€</span>
           </div>
           <div className="hero-note num hero-note-row">
+            <span>Months</span>
+            <span>{lifetime.monthCount}</span>
+          </div>
+          <div className="hero-note num hero-note-row">
             <span>Salary</span>
             <span>{fmtEUR(lifetime.salaryEUR)}</span>
           </div>
